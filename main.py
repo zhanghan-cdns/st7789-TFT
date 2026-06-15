@@ -152,8 +152,8 @@ def _read_net_bytes(iface):
     try:
         with open('/proc/net/dev') as f:
             for line in f:
-                if line.startswith(iface + ':'):
-                    parts = line.split()
+                parts = line.split()
+                if parts and parts[0].rstrip(':') == iface:
                     rx, tx = int(parts[1]), int(parts[9])
                     break
     except:
