@@ -95,7 +95,7 @@ def _net_card(disp, x, y, w, h, down, up):
 def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
                    mem_used, mem_total, mem_pct,
                    wifi_ssid, wifi_dbm, wifi_q,
-                   net_down=0, net_up=0):
+                   net_down=0, net_up=0, net_ip=None):
     W = disp.width
     disp.fill_screen(BLACK)
 
@@ -103,11 +103,12 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
     disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
     disp.draw_text_pil(16, 11, "系统监控", CYAN, size=16)
     if wifi_ssid:
-        label = wifi_ssid
+        label = wifi_ssid + (f" {net_ip}" if net_ip else "")
         draw_wifi_icon(disp, W - 28, 11, wifi_q, CYAN)
         disp.draw_text_pil(W - 34 - disp.text_width_pil(label, 10), 15, label, WHITE, size=10)
     else:
-        disp.draw_text_pil(W - 14 - disp.text_width_pil("WiFi --", 10), 15, "WiFi --", LGRAY, size=10)
+        label = "WiFi --" + (f" {net_ip}" if net_ip else "")
+        disp.draw_text_pil(W - 14 - disp.text_width_pil(label, 10), 15, label, LGRAY, size=10)
 
     # --- CPU / 内存 进度条卡片 ---
     _metric_card(disp, 6, 38, W - 12, 60, "CPU",

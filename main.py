@@ -133,6 +133,19 @@ def get_wifi_info():
     return '', 0, 0
 
 
+# ==================== 网络地址 ====================
+def get_ip_address(iface):
+    try:
+        import socket, struct, fcntl
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        return socket.inet_ntoa(fcntl.ioctl(
+            s.fileno(), 0xc0206921,
+            struct.pack('256s', iface[:15].encode())
+        )[20:24])
+    except:
+        return None
+
+
 # ==================== 网络速度 ====================
 def _detect_net_iface():
     for name in os.listdir('/sys/class/net'):
@@ -170,6 +183,7 @@ def main():
 
     net_iface = _detect_net_iface()
     prev_rx, prev_tx = _read_net_bytes(net_iface)
+    net_ip = get_ip_address(net_iface)
 
     try:
         while True:
@@ -191,7 +205,7 @@ def main():
             draw_dashboard(disp, cpu, cpu_temp, fan_rpm,
                            mem_used, mem_total, mem_pct,
                            wifi_ssid, wifi_dbm, wifi_q,
-                           net_down, net_up)
+                           net_down, net_up, net_ip)
             time.sleep(1)
     except KeyboardInterrupt:
         disp.close()
