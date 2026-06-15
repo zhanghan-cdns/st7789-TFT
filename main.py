@@ -5,6 +5,7 @@
 """
 import time
 import os
+import glob
 import subprocess
 
 from st7789_driver import ST7789
@@ -33,12 +34,23 @@ def get_cpu_usage():
 
 
 def get_cpu_temp():
-    """返回 CPU 温度字符串，如 '45C'，读取失败返回 'N/A'"""
+    """返回 CPU 温度（摄氏度，float），读取失败返回 None"""
     try:
         with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
-            return f"{int(f.read().strip())/1000:.0f}C"
+            return int(f.read().strip()) / 1000.0
     except:
-        return "N/A"
+        return None
+
+
+def get_fan_rpm():
+    """返回风扇转速（RPM, int），读取失败返回 None"""
+    try:
+        for path in glob.glob('/sys/class/hwmon/hwmon*/fan*_input'):
+            with open(path, 'r') as f:
+                return int(f.read().strip())
+    except:
+        pass
+    return None
 
 
 def get_memory():
@@ -132,10 +144,14 @@ def main():
         while True:
             cpu = get_cpu_usage()
             cpu_temp = get_cpu_temp()
+            fan_rpm = get_fan_rpm()
             mem_used, mem_total, mem_pct = get_memory()
             wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
-            print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  WiFi: {wifi_ssid} {wifi_dbm}dBm")
-            draw_dashboard(disp, cpu, cpu_temp, mem_used, mem_total, mem_pct,
+            temp_s = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
+            print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
+                  f"FAN: {fan_rpm}  WiFi: {wifi_ssid} {wifi_dbm}dBm")
+            draw_dashboard(disp, cpu, cpu_temp, fan_rpm,
+                           mem_used, mem_total, mem_pct,
                            wifi_ssid, wifi_dbm, wifi_q)
             time.sleep(1)
     except KeyboardInterrupt:
