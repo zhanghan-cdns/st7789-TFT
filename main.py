@@ -133,12 +133,43 @@ def get_wifi_info():
     return '', 0, 0
 
 
+# ==================== 网络速度 ====================
+def _detect_net_iface():
+    for name in os.listdir('/sys/class/net'):
+        if name == 'lo':
+            continue
+        try:
+            with open(f'/sys/class/net/{name}/operstate') as f:
+                if f.read().strip() == 'up':
+                    return name
+        except:
+            continue
+    return 'eth0'
+
+
+def _read_net_bytes(iface):
+    rx = tx = 0
+    try:
+        with open('/proc/net/dev') as f:
+            for line in f:
+                if line.startswith(iface + ':'):
+                    parts = line.split()
+                    rx, tx = int(parts[1]), int(parts[9])
+                    break
+    except:
+        pass
+    return rx, tx
+
+
 # ==================== 主程序 ====================
 def main():
     print("ST7789 初始化中...")
     disp = ST7789()
     disp.init()
     print("初始化完成，启动系统监控")
+
+    net_iface = _detect_net_iface()
+    prev_rx, prev_tx = _read_net_bytes(net_iface)
 
     try:
         while True:
@@ -147,12 +178,20 @@ def main():
             fan_rpm = get_fan_rpm()
             mem_used, mem_total, mem_pct = get_memory()
             wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
+
+            rx, tx = _read_net_bytes(net_iface)
+            net_down = rx - prev_rx
+            net_up = tx - prev_tx
+            prev_rx, prev_tx = rx, tx
+
             temp_s = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
             print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
-                  f"FAN: {fan_rpm}  WiFi: {wifi_ssid} {wifi_dbm}dBm")
+                  f"FAN: {fan_rpm}  WiFi: {wifi_ssid} "
+                  f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
             draw_dashboard(disp, cpu, cpu_temp, fan_rpm,
                            mem_used, mem_total, mem_pct,
-                           wifi_ssid, wifi_dbm, wifi_q)
+                           wifi_ssid, wifi_dbm, wifi_q,
+                           net_down, net_up)
             time.sleep(1)
     except KeyboardInterrupt:
         disp.close()
