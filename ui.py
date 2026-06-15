@@ -114,7 +114,7 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
 
     # --- CPU / 内存 进度条卡片 ---
     _metric_card(disp, 6, 38, W - 12, 60, "CPU",
-                 f"{cpu_pct:.0f}%", _load_color(cpu_pct), pct=cpu_pct, dot_color=CYAN)
+                 f"{cpu_pct:.0f}%", CYAN, pct=cpu_pct, dot_color=CYAN)
     mem_note = f"{mem_used:.0f}/{mem_total:.0f}MB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
                  f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
@@ -137,7 +137,7 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
         tw, th = disp.text_size_pil(temp_str, 28)
         ty = y_bot + 26 + ((h_bot - 26) - th) // 2
         disp.draw_text_pil(x2 + (card_w - tw) // 2, ty,
-                           temp_str, _temp_color(cpu_temp), size=28)
+                           temp_str, RED, size=28)
     else:
         disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
