@@ -90,9 +90,11 @@ def get_wifi_info():
                 ssid = parts[1]
                 signal = int(parts[2])  # nmcli 给出 0-100
                 dbm = -90 + int(signal * 60 / 100)
+                print(f"[wifi] 方法1 nmcli 成功: {ssid} {dbm}dBm")
                 return ssid, dbm, signal
     except:
         pass
+    print("[wifi] 方法1 nmcli 失败")
 
     try:
         # 方法2: iw dev (需安装 iw 包)
@@ -108,6 +110,7 @@ def get_wifi_info():
                     iface = name
                     break
         if not iface:
+            print("[wifi] 方法2 iw 未找到无线网卡")
             return '', 0, 0
         r = subprocess.run(['iw', 'dev', iface, 'link'], capture_output=True, text=True, timeout=3)
         ssid = ''
@@ -119,9 +122,11 @@ def get_wifi_info():
             elif 'signal:' in s:
                 signal = int(s.split(':')[1].strip().split()[0])
         quality = max(0, min(100, round((signal + 90) * 100 / 60)))
+        print(f"[wifi] 方法2 iw 成功: {ssid or iface} {signal}dBm")
         return ssid or iface, signal, quality
     except:
         pass
+    print("[wifi] 方法2 iw 失败")
 
     try:
         # 方法3: /proc/net/wireless (内核接口)
@@ -135,10 +140,13 @@ def get_wifi_info():
                         link_q = int(parts[2].rstrip('.'))  # 0~70 typical
                         quality = min(100, link_q * 100 // 70)
                         dbm = -90 + int(quality * 60 / 100)
+                        print(f"[wifi] 方法3 /proc/net/wireless 成功: {iface}")
                         return iface, dbm, quality
     except:
         pass
+    print("[wifi] 方法3 /proc/net/wireless 失败")
 
+    print("[wifi] 全部方法失败，返回空")
     return '', 0, 0
 
 
