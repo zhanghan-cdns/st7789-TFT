@@ -2,36 +2,62 @@
 
 只负责屏幕点亮与底层驱动：硬件控制 + 帧缓冲绘图原语。
 颜色常量见 color 模块，位图字体见 font 模块。
-接线（鲁班猫3 / RK3576）：
-  SCL->物理23(SCLK)  SDA->物理19(MOSI)  CS->物理24(CS0, 由 spidev1.0 硬件自动控制)
-  RES->物理29        DC->物理31
+硬件参数（SPI/GPIO 引脚等）见 config.json。
 """
+import json
+import os
 import spidev
 import gpiod
 import time
 
 from font import font_glyph
 
+_CONFIG = None
+
+def load_config(path=None):
+    """加载 config.json，返回配置字典"""
+    global _CONFIG
+    if path is None:
+        path = os.path.join(os.path.dirname(__file__), "config.json")
+    with open(path, "r") as f:
+        _CONFIG = json.load(f)
+    return _CONFIG
+
+def get_config(path=None):
+    """获取配置，未加载则自动加载"""
+    global _CONFIG
+    if _CONFIG is None:
+        load_config(path)
+    return _CONFIG
+
 
 class ST7789:
     """ST7789 显示屏驱动：硬件控制 + 帧缓冲 + 字体绘制"""
 
-    def __init__(self, spi_bus=1, spi_dev=0,
-                 rst_chip="/dev/gpiochip0", rst_pin=19,
-                 dc_chip="/dev/gpiochip0", dc_pin=21,
-                 width=320, height=240, x_offset=0, y_offset=0,
-                 speed_hz=15000000, spi_mode=3):
-        # !!! rst_pin/dc_pin 须改成 物理29(RES)/物理31(DC) 实际对应的 gpiochip 线号 !!!
-        #   默认：物理29 = GPIO0_C3 (2*8+3=19)，物理31 = GPIO0_C5 (2*8+5=21)
-        self.width = width
-        self.height = height
-        self.x_offset = x_offset
-        self.y_offset = y_offset
+    def __init__(self, config_path=None, **kwargs):
+        cfg = get_config(config_path)
+        dpy = cfg["display"]
+        spi = cfg["spi"]
+        gpio = cfg["gpio"]
+
+        # kwargs 可覆盖 config.json
+        self.width = kwargs.get("width", dpy["width"])
+        self.height = kwargs.get("height", dpy["height"])
+        self.x_offset = kwargs.get("x_offset", dpy["x_offset"])
+        self.y_offset = kwargs.get("y_offset", dpy["y_offset"])
+        spi_bus = kwargs.get("spi_bus", spi["bus"])
+        spi_dev = kwargs.get("spi_dev", spi["device"])
+        speed_hz = kwargs.get("speed_hz", spi["speed_hz"])
+        spi_mode = kwargs.get("spi_mode", spi["mode"])
+        rst_chip = kwargs.get("rst_chip", gpio["rst_chip"])
+        rst_pin = kwargs.get("rst_pin", gpio["rst_pin"])
+        dc_chip = kwargs.get("dc_chip", gpio["dc_chip"])
+        dc_pin = kwargs.get("dc_pin", gpio["dc_pin"])
 
         # SPI 初始化
         self.spi = spidev.SpiDev()
         self.spi.open(spi_bus, spi_dev)
-        self.spi.mode = spi_mode        # CPOL=1, CPHA=1（花屏可试 0）
+        self.spi.mode = spi_mode
         self.spi.max_speed_hz = speed_hz
 
         # GPIO 初始化（CS 由硬件控制，这里只需 RES 和 DC）
@@ -221,12 +247,7 @@ class ST7789:
             if font_path:
                 self._FONT_CACHE[key] = ImageFont.truetype(font_path, size)
             else:
-                candidates = [
-                    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                    "/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                ]
+                candidates = get_config().get("font_paths", [])
                 for p in candidates:
                     try:
                         self._FONT_CACHE[key] = ImageFont.truetype(p, size)
