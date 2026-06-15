@@ -19,16 +19,25 @@ def _read_cpu_times():
     return [int(x) for x in parts[1:]]
 
 
+_prev_cpu = None  # 上次 /proc/stat 快照 (total, idle)
+
+
 def get_cpu_usage():
-    """返回 CPU 总使用率百分比"""
-    t1 = _read_cpu_times()
-    time.sleep(0.2)
-    t2 = _read_cpu_times()
-    idle1 = t1[3]; total1 = sum(t1)
-    idle2 = t2[3]; total2 = sum(t2)
-    d_idle = idle2 - idle1
-    d_total = total2 - total1
-    if d_total == 0:
+    """基于两次调用间的增量计算 CPU 使用率，覆盖整个采样周期。
+
+    首次调用无基准返回 0.0，之后每轮用相邻两次的差值计算，
+    使测量窗口覆盖整个循环（含绘制/子进程），避免短窗口读到假 0。
+    """
+    global _prev_cpu
+    t = _read_cpu_times()
+    total, idle = sum(t), t[3]
+    prev = _prev_cpu
+    _prev_cpu = (total, idle)
+    if prev is None:
+        return 0.0
+    d_total = total - prev[0]
+    d_idle = idle - prev[1]
+    if d_total <= 0:
         return 0.0
     return round(100.0 * (1 - d_idle / d_total), 1)
 
@@ -185,6 +194,7 @@ def main():
     net_iface = _detect_net_iface()
     prev_rx, prev_tx = _read_net_bytes(net_iface)
     net_ip = get_ip_address(net_iface)
+    get_cpu_usage()  # 预热，建立 CPU 采样基准
 
     try:
         while True:
