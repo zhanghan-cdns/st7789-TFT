@@ -63,7 +63,7 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
     """通用指标卡片：圆角底 + 左侧强调条 + 标题 + 大数值 (+ 进度条/单位/右上备注)"""
     disp.fill_round_rect(x, y, w, h, 8, CARD)
     disp.fill_circle(x + 12, y + 12, 5, color)          # 左侧强调圆点
-    disp.draw_text(x + 18, y + 8, label, LGRAY, 1)
+    disp.draw_text(x + 23, y + 8, label, LGRAY, 1)
     if note:
         disp.draw_text(x + w - 8 - _text_w(note, 1), y + 8, note, LGRAY, 1)
     disp.draw_text(x + 12, y + 22, value, color, 3)
