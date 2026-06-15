@@ -8,12 +8,6 @@ from color import (
     BLACK, WHITE, GREEN, RED, CYAN, ORANGE, DGRAY, LGRAY, CARD, TRACK,
 )
 
-_CW = 6  # 单字符宽度（scale=1），字符高 8
-
-
-def _text_w(text, scale):
-    return len(text) * _CW * scale
-
 
 def _load_color(pct):
     """按负载返回颜色：绿 < 60 ≤ 橙 < 85 ≤ 红"""
@@ -63,12 +57,12 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
     """通用指标卡片：圆角底 + 左侧强调条 + 标题 + 大数值 (+ 进度条/单位/右上备注)"""
     disp.fill_round_rect(x, y, w, h, 8, CARD)
     disp.fill_circle(x + 12, y + 12, 5, color)          # 左侧强调圆点
-    disp.draw_text(x + 23, y + 8, label, LGRAY, 1)
+    disp.draw_text_pil(x + 23, y + 8, label, LGRAY, size=10)
     if note:
-        disp.draw_text(x + w - 8 - _text_w(note, 1), y + 8, note, LGRAY, 1)
-    disp.draw_text(x + 12, y + 22, value, color, 3)
+        disp.draw_text_pil(x + w - 8 - disp.text_width_pil(note, 10), y + 8, note, LGRAY, size=10)
+    disp.draw_text_pil(x + 12, y + 22, value, color, size=24)
     if unit:
-        disp.draw_text(x + 12, y + h - 14, unit, LGRAY, 1)
+        disp.draw_text_pil(x + 12, y + h - 14, unit, LGRAY, size=10)
     if pct is not None:
         draw_bar(disp, x + 12, y + h - 12, w - 24, 8, pct, color)
 
@@ -82,13 +76,13 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
 
     # --- 顶栏 ---
     disp.fill_round_rect(6, 6, W - 12, 30, 6, CARD)
-    disp.draw_text(16, 13, "SYS MONITOR", CYAN, 2)
+    disp.draw_text_pil(16, 12, "SYS MONITOR", CYAN, size=16)
     if wifi_ssid:
         label = wifi_ssid
         draw_wifi_icon(disp, W - 28, 13, wifi_q, CYAN)
-        disp.draw_text(W - 34 - _text_w(label, 1), 15, label, WHITE, 1)
+        disp.draw_text_pil(W - 34 - disp.text_width_pil(label, 10), 15, label, WHITE, size=10)
     else:
-        disp.draw_text(W - 14 - _text_w("WiFi --", 1), 15, "WiFi --", LGRAY, 1)
+        disp.draw_text_pil(W - 14 - disp.text_width_pil("WiFi --", 10), 15, "WiFi --", LGRAY, size=10)
 
     # --- CPU / 内存 进度条卡片 ---
     _metric_card(disp, 6, 40, W - 12, 60, "CPU",

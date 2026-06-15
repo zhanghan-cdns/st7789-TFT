@@ -209,32 +209,45 @@ class ST7789:
         for i, ch in enumerate(text):
             self.draw_char(x + i * 6 * scale, y, ch, color, scale)
 
+    _FONT_CACHE = {}
+
+    def _pil_font(self, size, font_path=None):
+        key = (size, font_path)
+        if key not in self._FONT_CACHE:
+            try:
+                from PIL import ImageFont
+            except ImportError:
+                raise ImportError("需要 Pillow: pip install Pillow")
+            if font_path:
+                self._FONT_CACHE[key] = ImageFont.truetype(font_path, size)
+            else:
+                candidates = [
+                    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+                    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                    "/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+                ]
+                for p in candidates:
+                    try:
+                        self._FONT_CACHE[key] = ImageFont.truetype(p, size)
+                        break
+                    except (IOError, OSError):
+                        continue
+            if key not in self._FONT_CACHE:
+                self._FONT_CACHE[key] = ImageFont.load_default()
+        return self._FONT_CACHE[key]
+
+    def text_width_pil(self, text, size=16, font_path=None):
+        font = self._pil_font(size, font_path)
+        bbox = font.getbbox(text)
+        return bbox[2] - bbox[0]
+
     def draw_text_pil(self, x, y, text, color, size=16, font_path=None):
-        """用 PIL 绘制文本（支持中文），需安装 Pillow"""
         try:
-            from PIL import Image, ImageDraw, ImageFont
+            from PIL import Image, ImageDraw
         except ImportError:
-            raise ImportError("draw_text_pil 需要 Pillow: pip install Pillow")
-
-        if not font_path:
-            candidates = [
-                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
-                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                "/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            ]
-            for p in candidates:
-                try:
-                    font = ImageFont.truetype(p, size)
-                    font_path = p
-                    break
-                except (IOError, OSError):
-                    continue
-            if not font_path:
-                font = ImageFont.load_default()
-        else:
-            font = ImageFont.truetype(font_path, size)
-
+            raise ImportError("需要 Pillow: pip install Pillow")
+        font = self._pil_font(size, font_path)
         bbox = font.getbbox(text)
         tw, th = bbox[2], bbox[3]
         img = Image.new("1", (tw, th), 0)
