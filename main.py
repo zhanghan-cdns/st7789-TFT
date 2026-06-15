@@ -136,14 +136,15 @@ def get_wifi_info():
 # ==================== 网络地址 ====================
 def get_ip_address(iface):
     try:
-        import socket, struct, fcntl
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(), 0xc0206921,
-            struct.pack('256s', iface[:15].encode())
-        )[20:24])
+        r = subprocess.run(['ip', '-4', 'addr', 'show', iface],
+                         capture_output=True, text=True, timeout=3)
+        for line in r.stdout.split('\n'):
+            parts = line.strip().split()
+            if len(parts) > 1 and parts[0] == 'inet':
+                return parts[1].split('/')[0]
     except:
-        return None
+        pass
+    return None
 
 
 # ==================== 网络速度 ====================
