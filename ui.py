@@ -62,7 +62,7 @@ def draw_wifi_icon(disp, x, y, quality, color=WHITE):
 def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=""):
     """通用指标卡片：圆角底 + 左侧强调条 + 标题 + 大数值 (+ 进度条/单位/右上备注)"""
     disp.fill_round_rect(x, y, w, h, 8, CARD)
-    disp.fill_circle(x + 12, y + 14, 5, color)          # 左侧强调圆点
+    disp.fill_circle(x + 12, y + 12, 5, color)          # 左侧强调圆点
     disp.draw_text(x + 18, y + 8, label, LGRAY, 1)
     if note:
         disp.draw_text(x + w - 8 - _text_w(note, 1), y + 8, note, LGRAY, 1)
@@ -84,7 +84,7 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
     disp.fill_round_rect(6, 6, W - 12, 30, 6, CARD)
     disp.draw_text(16, 13, "SYS MONITOR", CYAN, 2)
     if wifi_ssid:
-        label = wifi_ssid[:8]
+        label = wifi_ssid
         draw_wifi_icon(disp, W - 28, 13, wifi_q, CYAN)
         disp.draw_text(W - 34 - _text_w(label, 1), 15, label, WHITE, 1)
     else:
