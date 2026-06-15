@@ -101,7 +101,7 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
 
     # --- 顶栏 ---
     disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "SYS MONITOR", CYAN, size=16)
+    disp.draw_text_pil(16, 11, "系统监控", CYAN, size=16)
     if wifi_ssid:
         label = wifi_ssid
         draw_wifi_icon(disp, W - 28, 11, wifi_q, CYAN)
