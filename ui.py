@@ -5,7 +5,7 @@
 布局：顶栏 + CPU/内存进度条卡片 + 底部 NET/温度/风扇 3 列卡片。
 """
 from color import (
-    BLACK, WHITE, GREEN, RED, CYAN, ORANGE, DGRAY, LGRAY, CARD, TRACK,
+    BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD, TRACK,
 )
 
 
@@ -58,9 +58,11 @@ def draw_wifi_icon(disp, x, y, quality, color=WHITE):
     disp.fill_rect(x+7, y+12, 2, 2, color)
 
 
-def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=""):
+def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit="", dot_color=None):
+    if dot_color is None:
+        dot_color = color
     disp.fill_round_rect(x, y, w, h, 8, CARD)
-    disp.fill_circle(x + 12, y + 12, 5, color)
+    disp.fill_circle(x + 12, y + 12, 5, dot_color)
     disp.draw_text_pil(x + 23, y + 10, label, LGRAY, size=10)
     if note:
         disp.draw_text_pil(x + w - 8 - disp.text_width_pil(note, 10), y + 10, note, LGRAY, size=10)
@@ -83,11 +85,11 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
 
 def _net_card(disp, x, y, w, h, down, up):
     disp.fill_round_rect(x, y, w, h, 8, CARD)
-    disp.fill_circle(x + 12, y + 12, 5, CYAN)
+    disp.fill_circle(x + 12, y + 12, 5, ORANGE)
     disp.draw_text_pil(x + 23, y + 10, "NET", LGRAY, size=10)
     d_text = f"\u2193 {_fmt_speed(down)}"
     u_text = f"\u2191 {_fmt_speed(up)}"
-    disp.draw_text_pil(x + 12, y + 28, d_text, GREEN, size=16)
+    disp.draw_text_pil(x + 12, y + 28, d_text, ORANGE, size=16)
     disp.draw_text_pil(x + 12, y + 52, u_text, CYAN, size=16)
 
 
@@ -112,10 +114,10 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
 
     # --- CPU / 内存 进度条卡片 ---
     _metric_card(disp, 6, 38, W - 12, 60, "CPU",
-                 f"{cpu_pct:.0f}%", _load_color(cpu_pct), pct=cpu_pct)
+                 f"{cpu_pct:.0f}%", _load_color(cpu_pct), pct=cpu_pct, dot_color=CYAN)
     mem_note = f"{mem_used:.0f}/{mem_total:.0f}MB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
-                 f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note)
+                 f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
 
     # --- 底部：NET / 核心温度 / 风扇转速 三列 ---
     gap = 8
@@ -128,7 +130,7 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
 
     # --- 温度卡片（大字体居中）---
     disp.fill_round_rect(x2, y_bot, card_w, h_bot, 8, CARD)
-    disp.fill_circle(x2 + 12, y_bot + 12, 5, _temp_color(cpu_temp))
+    disp.fill_circle(x2 + 12, y_bot + 12, 5, RED)
     disp.draw_text_pil(x2 + 23, y_bot + 10, "CORE TEMP", LGRAY, size=10)
     if cpu_temp is not None:
         temp_str = f"{cpu_temp:.0f}\u00b0C"
@@ -139,17 +141,14 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
     else:
         disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
-    # --- 风扇卡片（数值居中）---
+    # --- 风扇卡片（数值居中，单位跟在值后）---
     disp.fill_round_rect(x3, y_bot, card_w, h_bot, 8, CARD)
-    disp.fill_circle(x3 + 12, y_bot + 12, 5, CYAN)
+    disp.fill_circle(x3 + 12, y_bot + 12, 5, YELLOW)
     disp.draw_text_pil(x3 + 23, y_bot + 10, "FAN", LGRAY, size=10)
-    fan_text = f"{fan_val}" if fan_val is not None else "N/A"
+    fan_text = f"{fan_val}{fan_unit}" if fan_val is not None else "N/A"
     tw, th = disp.text_size_pil(fan_text, 24)
     fx = x3 + (card_w - tw) // 2
-    fy = y_bot + 26 + ((h_bot - 26 - 14) - th) // 2
-    disp.draw_text_pil(fx, fy, fan_text, CYAN, size=24)
-    fan_unit_text = fan_unit if fan_unit else ""
-    if fan_unit_text:
-        disp.draw_text_pil(x3 + 12, y_bot + h_bot - 14, fan_unit_text, LGRAY, size=10)
+    fy = y_bot + 26 + ((h_bot - 26) - th) // 2
+    disp.draw_text_pil(fx, fy, fan_text, YELLOW, size=24)
 
     disp.flush()
