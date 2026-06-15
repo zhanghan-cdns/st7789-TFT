@@ -52,20 +52,24 @@ def get_cpu_temp():
 
 
 def get_fan_rpm():
-    """返回风扇转速（RPM, int），读取失败返回 None"""
-    patterns = [
-        '/sys/class/hwmon/hwmon*/fan*_input',
-        '/sys/devices/platform/pwm-fan/hwmon/hwmon*/fan*_input',
-    ]
-    for pat in patterns:
-        for path in glob.glob(pat):
-            try:
-                val = int(open(path).read().strip())
-                if val > 0:
-                    return val
-            except:
-                pass
-    return None
+    """返回 (rpm_or_pwm, unit)，unit 为 'RPM' 或 '%'，失败返回 (None, None)"""
+    # 优先读有转速传感器的
+    for path in glob.glob('/sys/class/hwmon/hwmon*/fan*_input'):
+        try:
+            val = int(open(path).read().strip())
+            if val > 0:
+                return val, 'RPM'
+        except:
+            pass
+    # 退回到 PWM 占空比
+    for path in glob.glob('/sys/class/hwmon/hwmon*/pwm1'):
+        try:
+            val = int(open(path).read().strip())
+            pct = val * 100 // 255
+            return pct, '%'
+        except:
+            pass
+    return None, None
 
 
 def get_memory():
@@ -169,7 +173,7 @@ def main():
         while True:
             cpu = get_cpu_usage()
             cpu_temp = get_cpu_temp()
-            fan_rpm = get_fan_rpm()
+            fan_val, fan_unit = get_fan_rpm()
             mem_used, mem_total, mem_pct = get_memory()
             wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
 
@@ -180,9 +184,9 @@ def main():
 
             temp_s = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
             print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
-                  f"FAN: {fan_rpm}  WiFi: {wifi_ssid} "
+                  f"FAN: {fan_val}{fan_unit or ''}  WiFi: {wifi_ssid} "
                   f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
-            draw_dashboard(disp, cpu, cpu_temp, fan_rpm,
+            draw_dashboard(disp, cpu, cpu_temp, fan_val, fan_unit,
                            mem_used, mem_total, mem_pct,
                            wifi_ssid, wifi_dbm, wifi_q,
                            net_down, net_up, net_ip)
