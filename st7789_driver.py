@@ -159,6 +159,27 @@ class ST7789:
             self.fill_rect(x + dx, y + dy, w - 2 * dx, 1, color)
             self.fill_rect(x + dx, y + h - 1 - dy, w - 2 * dx, 1, color)
 
+    def fill_circle(self, cx, cy, r, color):
+        """填充圆，中点圆算法"""
+        hi = (color >> 8) & 0xFF
+        lo = color & 0xFF
+        pixel = bytearray([hi, lo])
+        stride = self.width * 2
+        for y in range(-r, r + 1):
+            dy = abs(y)
+            if dy > r:
+                continue
+            dx = int((r * r - dy * dy) ** 0.5)
+            x0 = max(0, cx - dx)
+            x1 = min(self.width, cx + dx + 1)
+            if x0 >= x1:
+                continue
+            py = cy + y
+            if py < 0 or py >= self.height:
+                continue
+            off = py * stride + x0 * 2
+            self.fbuf[off:off + (x1 - x0) * 2] = pixel * (x1 - x0)
+
     def fill_screen(self, color):
         hi = (color >> 8) & 0xFF
         lo = color & 0xFF
