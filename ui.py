@@ -138,8 +138,15 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
     else:
         disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
+    # --- 风扇卡片（数值居中）---
+    disp.fill_round_rect(x3, y_bot, card_w, h_bot, 8, CARD)
+    disp.fill_circle(x3 + 12, y_bot + 12, 5, CYAN)
+    disp.draw_text_pil(x3 + 23, y_bot + 10, "FAN", LGRAY, size=10)
     fan_val = f"{fan_rpm}" if fan_rpm is not None else "N/A"
-    _metric_card(disp, x3, y_bot, card_w, h_bot, "FAN",
-                 fan_val, CYAN, unit="RPM")
+    tw, th = disp.text_size_pil(fan_val, 24)
+    fx = x3 + (card_w - tw) // 2
+    fy = y_bot + 26 + ((h_bot - 26 - 14) - th) // 2
+    disp.draw_text_pil(fx, fy, fan_val, CYAN, size=24)
+    disp.draw_text_pil(x3 + 12, y_bot + h_bot - 14, "RPM", LGRAY, size=10)
 
     disp.flush()
