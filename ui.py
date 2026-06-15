@@ -65,8 +65,16 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
     if note:
         disp.draw_text_pil(x + w - 8 - disp.text_width_pil(note, 10), y + 10, note, LGRAY, size=10)
     if pct is not None:
-        disp.draw_text_pil(x + 12, y + 26, value, color, size=20)
-        draw_bar(disp, x + 12, y + h - 8, w - 24, 8, pct, color)
+        bar_h = 12
+        bar_y = y + 30
+        bar_gap = 8
+        tw, th = disp.text_size_pil(value, 20)
+        bar_w = w - 24 - bar_gap - tw
+        if bar_w < 20:
+            bar_w = 20
+        draw_bar(disp, x + 12, bar_y, bar_w, bar_h, pct, color)
+        disp.draw_text_pil(x + 12 + bar_w + bar_gap, bar_y + (bar_h - th) // 2,
+                           value, color, size=20)
     else:
         disp.draw_text_pil(x + 12, y + 24, value, color, size=24)
         if unit:
