@@ -209,6 +209,55 @@ class ST7789:
         for i, ch in enumerate(text):
             self.draw_char(x + i * 6 * scale, y, ch, color, scale)
 
+    def draw_text_pil(self, x, y, text, color, size=16, font_path=None):
+        """用 PIL 绘制文本（支持中文），需安装 Pillow"""
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+        except ImportError:
+            raise ImportError("draw_text_pil 需要 Pillow: pip install Pillow")
+
+        if not font_path:
+            candidates = [
+                "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+                "/usr/share/fonts/truetype/droid/DroidSansFallback.ttf",
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            ]
+            for p in candidates:
+                try:
+                    font = ImageFont.truetype(p, size)
+                    font_path = p
+                    break
+                except (IOError, OSError):
+                    continue
+            if not font_path:
+                font = ImageFont.load_default()
+        else:
+            font = ImageFont.truetype(font_path, size)
+
+        bbox = font.getbbox(text)
+        tw, th = bbox[2], bbox[3]
+        img = Image.new("1", (tw, th), 0)
+        draw = ImageDraw.Draw(img)
+        draw.text((-bbox[0], -bbox[1]), text, font=font, fill=1)
+
+        hi = (color >> 8) & 0xFF
+        lo = color & 0xFF
+        pixel = bytearray([hi, lo])
+        stride = self.width * 2
+
+        for py in range(th):
+            iy = y + py
+            if iy < 0 or iy >= self.height:
+                continue
+            for px in range(tw):
+                ix = x + px
+                if ix < 0 or ix >= self.width:
+                    continue
+                if img.getpixel((px, py)):
+                    off = iy * stride + ix * 2
+                    self.fbuf[off:off+2] = pixel
+
     # ==================== 资源释放 ====================
     def close(self):
         self._dc_line.release()
