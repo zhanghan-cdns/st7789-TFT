@@ -20,7 +20,7 @@ class ST7789:
                  rst_chip="/dev/gpiochip0", rst_pin=19,
                  dc_chip="/dev/gpiochip0", dc_pin=21,
                  width=320, height=240, x_offset=0, y_offset=0,
-                 speed_hz=1000000, spi_mode=3):
+                 speed_hz=15000000, spi_mode=3):
         # !!! rst_pin/dc_pin 须改成 物理29(RES)/物理31(DC) 实际对应的 gpiochip 线号 !!!
         #   默认：物理29 = GPIO0_C3 (2*8+3=19)，物理31 = GPIO0_C5 (2*8+5=21)
         self.width = width
@@ -32,7 +32,7 @@ class ST7789:
         self.spi = spidev.SpiDev()
         self.spi.open(spi_bus, spi_dev)
         self.spi.mode = spi_mode        # CPOL=1, CPHA=1（花屏可试 0）
-        self.spi.max_speed_hz = speed_hz  # 先 1MHz 排查花屏；稳定后可调 5M/10M
+        self.spi.max_speed_hz = speed_hz
 
         # GPIO 初始化（CS 由硬件控制，这里只需 RES 和 DC）
         self._rst_chip = gpiod.Chip(rst_chip)
@@ -134,9 +134,16 @@ class ST7789:
     def fill_rect(self, x, y, w, h, color):
         x0 = max(0, x); y0 = max(0, y)
         x1 = min(self.width, x + w); y1 = min(self.height, y + h)
+        if x0 >= x1 or y0 >= y1:
+            return
+        hi = (color >> 8) & 0xFF
+        lo = color & 0xFF
+        row = bytearray([hi, lo]) * (x1 - x0)
+        stride = self.width * 2
+        off = y0 * stride + x0 * 2
         for py in range(y0, y1):
-            for px in range(x0, x1):
-                self.draw_pixel(px, py, color)
+            self.fbuf[off:off + len(row)] = row
+            off += stride
 
     def fill_round_rect(self, x, y, w, h, r, color):
         """填充圆角矩形，r 为圆角半径"""
@@ -155,15 +162,14 @@ class ST7789:
     def fill_screen(self, color):
         hi = (color >> 8) & 0xFF
         lo = color & 0xFF
-        for i in range(0, len(self.fbuf), 2):
-            self.fbuf[i] = hi
-            self.fbuf[i+1] = lo
+        pixel = bytearray([hi, lo])
+        self.fbuf[:] = pixel * (self.width * self.height)
 
     def flush(self):
         """将帧缓冲整屏刷新到屏幕"""
         self.set_window(0, 0, self.width - 1, self.height - 1)
         self._dc_line.set_value(1)
-        self._spi_write(bytes(self.fbuf))
+        self._spi_write(self.fbuf)
 
     # ==================== 字体绘制 ====================
     def draw_char(self, x, y, ch, color, scale=1):
