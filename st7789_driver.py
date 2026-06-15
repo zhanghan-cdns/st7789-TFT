@@ -69,7 +69,7 @@ class ST7789:
         self._dc_line.request(consumer="st7789", type=gpiod.LINE_REQ_DIR_OUT, default_vals=[0])
 
         # 帧缓冲
-        self.fbuf = bytearray(width * height * 2)
+        self.fbuf = bytearray(self.width * self.height * 2)
 
     # ==================== 底层函数 ====================
     def _spi_write(self, data):
