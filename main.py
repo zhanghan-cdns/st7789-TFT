@@ -53,12 +53,18 @@ def get_cpu_temp():
 
 def get_fan_rpm():
     """返回风扇转速（RPM, int），读取失败返回 None"""
-    try:
-        for path in glob.glob('/sys/class/hwmon/hwmon*/fan*_input'):
-            with open(path, 'r') as f:
-                return int(f.read().strip())
-    except:
-        pass
+    patterns = [
+        '/sys/class/hwmon/hwmon*/fan*_input',
+        '/sys/devices/platform/pwm-fan/hwmon/hwmon*/fan*_input',
+    ]
+    for pat in patterns:
+        for path in glob.glob(pat):
+            try:
+                val = int(open(path).read().strip())
+                if val > 0:
+                    return val
+            except:
+                pass
     return None
 
 
@@ -80,7 +86,6 @@ def get_memory():
 def get_wifi_info():
     """返回 (ssid, signal_dbm, quality_pct)，未连接返回 ('', 0, 0)"""
     try:
-        # 方法1: nmcli (Ubuntu 默认 NetworkManager)
         r = subprocess.run(
             ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL', 'dev', 'wifi', 'list'],
             capture_output=True, text=True, timeout=3)
@@ -88,65 +93,11 @@ def get_wifi_info():
             parts = line.split(':')
             if len(parts) >= 3 and parts[0] == '*':
                 ssid = parts[1]
-                signal = int(parts[2])  # nmcli 给出 0-100
+                signal = int(parts[2])
                 dbm = -90 + int(signal * 60 / 100)
-                print(f"[wifi] 方法1 nmcli 成功: {ssid} {dbm}dBm")
                 return ssid, dbm, signal
     except:
         pass
-    print("[wifi] 方法1 nmcli 失败")
-
-    try:
-        # 方法2: iw dev (需安装 iw 包)
-        r = subprocess.run(['iw', 'dev'], capture_output=True, text=True, timeout=3)
-        iface = None
-        for line in r.stdout.split('\n'):
-            if 'Interface' in line:
-                iface = line.split('Interface')[-1].strip()
-                break
-        if not iface:
-            for name in ['wlan0', 'wlp1s0', 'wlp2s0', 'wlp3s0']:
-                if os.path.exists(f'/sys/class/net/{name}/wireless'):
-                    iface = name
-                    break
-        if not iface:
-            print("[wifi] 方法2 iw 未找到无线网卡")
-            return '', 0, 0
-        r = subprocess.run(['iw', 'dev', iface, 'link'], capture_output=True, text=True, timeout=3)
-        ssid = ''
-        signal = 0
-        for line in r.stdout.split('\n'):
-            s = line.strip()
-            if s.startswith('SSID:'):
-                ssid = s.split(':', 1)[1].strip()
-            elif 'signal:' in s:
-                signal = int(s.split(':')[1].strip().split()[0])
-        quality = max(0, min(100, round((signal + 90) * 100 / 60)))
-        print(f"[wifi] 方法2 iw 成功: {ssid or iface} {signal}dBm")
-        return ssid or iface, signal, quality
-    except:
-        pass
-    print("[wifi] 方法2 iw 失败")
-
-    try:
-        # 方法3: /proc/net/wireless (内核接口)
-        with open('/proc/net/wireless', 'r') as f:
-            lines = f.readlines()
-            if len(lines) >= 3:
-                for line in lines[2:]:
-                    parts = line.split()
-                    if len(parts) >= 4 and ':' in parts[0]:
-                        iface = parts[0].rstrip(':')
-                        link_q = int(parts[2].rstrip('.'))  # 0~70 typical
-                        quality = min(100, link_q * 100 // 70)
-                        dbm = -90 + int(quality * 60 / 100)
-                        print(f"[wifi] 方法3 /proc/net/wireless 成功: {iface}")
-                        return iface, dbm, quality
-    except:
-        pass
-    print("[wifi] 方法3 /proc/net/wireless 失败")
-
-    print("[wifi] 全部方法失败，返回空")
     return '', 0, 0
 
 
@@ -198,6 +149,16 @@ def main():
     disp = ST7789()
     disp.init()
     print("初始化完成，启动系统监控")
+
+    # 扫描 hwmon 设备（调试风扇）
+    for d in glob.glob('/sys/class/hwmon/hwmon*'):
+        try:
+            name = open(f'{d}/name').read().strip()
+            fans = glob.glob(f'{d}/fan*_input')
+            if fans:
+                print(f"  hwmon 设备: {name}  -> {fans}")
+        except:
+            pass
 
     net_iface = _detect_net_iface()
     prev_rx, prev_tx = _read_net_bytes(net_iface)
