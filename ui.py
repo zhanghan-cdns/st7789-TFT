@@ -115,9 +115,17 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_rpm,
 
     _net_card(disp, x1, y_bot, card_w, h_bot, net_down, net_up)
 
-    temp_val = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
-    _metric_card(disp, x2, y_bot, card_w, h_bot, "CORE TEMP",
-                 temp_val, _temp_color(cpu_temp))
+    # --- 温度卡片（大字体居中）---
+    disp.fill_round_rect(x2, y_bot, card_w, h_bot, 8, CARD)
+    disp.fill_circle(x2 + 12, y_bot + 12, 5, _temp_color(cpu_temp))
+    disp.draw_text_pil(x2 + 23, y_bot + 8, "CORE TEMP", LGRAY, size=10)
+    if cpu_temp is not None:
+        temp_str = f"{cpu_temp:.0f}\u2103"
+        tw, th = disp.text_size_pil(temp_str, 28)
+        disp.draw_text_pil(x2 + (card_w - tw) // 2, y_bot + (h_bot - th) // 2,
+                           temp_str, _temp_color(cpu_temp), size=28)
+    else:
+        disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
     fan_val = f"{fan_rpm}" if fan_rpm is not None else "N/A"
     _metric_card(disp, x3, y_bot, card_w, h_bot, "FAN",

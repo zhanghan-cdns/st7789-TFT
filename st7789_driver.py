@@ -237,10 +237,14 @@ class ST7789:
                 self._FONT_CACHE[key] = ImageFont.load_default()
         return self._FONT_CACHE[key]
 
-    def text_width_pil(self, text, size=16, font_path=None):
+    def text_size_pil(self, text, size=16, font_path=None):
         font = self._pil_font(size, font_path)
         bbox = font.getbbox(text)
-        return bbox[2] - bbox[0]
+        return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
+    def text_width_pil(self, text, size=16, font_path=None):
+        w, _ = self.text_size_pil(text, size, font_path)
+        return w
 
     def draw_text_pil(self, x, y, text, color, size=16, font_path=None):
         try:
