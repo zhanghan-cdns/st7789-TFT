@@ -74,7 +74,7 @@ class ST7789:
     def init(self):
         self._reset()
         self._cmd(0x36)
-        self._data(0x20)   # 横屏 320x240：镜像试 0x60/0xA0/0xE0
+        self._data(0x60)   # 横屏 320x240：MX+MV（修正左右镜像）
         self._cmd(0x3A)
         self._data(0x55)
         self._cmd(0xB2)
