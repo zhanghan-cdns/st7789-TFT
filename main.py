@@ -93,31 +93,30 @@ def get_wifi_info():
     """返回 (ssid, signal_dbm, quality_pct)，失败时沿用上次缓存"""
     global _wifi_cache
     try:
-        r = subprocess.run(['iw', 'dev'], capture_output=True, text=True, timeout=3)
-        iface = None
-        for line in r.stdout.split('\n'):
-            if 'Interface' in line:
-                iface = line.split('Interface')[-1].strip()
-                break
-        if not iface:
-            for name in ['wlan0', 'wlp1s0', 'wlp2s0', 'wlp3s0']:
-                if os.path.exists(f'/sys/class/net/{name}/wireless'):
-                    iface = name
-                    break
-        if not iface:
-            return _wifi_cache if _wifi_cache else ('', 0, 0)
-        r = subprocess.run(['iw', 'dev', iface, 'link'], capture_output=True, text=True, timeout=3)
+        r = subprocess.run(
+            ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
+            capture_output=True, text=True, timeout=3)
         ssid = ''
-        signal = 0
-        for line in r.stdout.split('\n'):
-            s = line.strip()
-            if s.startswith('SSID:'):
-                ssid = s.split(':', 1)[1].strip()
-            elif 'signal:' in s:
-                signal = int(s.split(':')[1].strip().split()[0])
+        for line in r.stdout.strip().split('\n'):
+            parts = line.split(':')
+            if len(parts) >= 2 and parts[1] == 'wifi':
+                ssid = parts[0]
+                break
         if ssid:
-            quality = max(0, min(100, round((signal + 90) * 100 / 60)))
-            _wifi_cache = (ssid, signal, quality)
+            _wifi_cache = (ssid, -45, 75)
+            try:
+                r2 = subprocess.run(
+                    ['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'dev', 'wifi', 'list', '--rescan', 'no'],
+                    capture_output=True, text=True, timeout=2)
+                for line in r2.stdout.strip().split('\n'):
+                    parts = line.split(':')
+                    if len(parts) >= 2 and parts[0] == '*':
+                        signal = int(parts[1])
+                        dbm = -90 + int(signal * 60 / 100)
+                        _wifi_cache = (ssid, dbm, signal)
+                        break
+            except:
+                pass
             return _wifi_cache
     except:
         pass
