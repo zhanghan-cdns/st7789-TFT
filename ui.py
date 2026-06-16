@@ -216,10 +216,10 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     disp.draw_text_pil(x2 + 23, y_bot + 10, "CORE TEMP", LGRAY, size=10)
     if cpu_temp is not None:
         temp_str = f"{cpu_temp:.0f}\u00b0C"
-        tw, th = disp.text_size_pil(temp_str, 28)
+        tw, th = disp.text_size_pil(temp_str, 24)
         ty = y_bot + 26 + ((h_bot - 26) - th) // 2
         disp.draw_text_pil(x2 + (card_w - tw) // 2, ty,
-                           temp_str, RED, size=28)
+                           temp_str, RED, size=24)
     else:
         disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
