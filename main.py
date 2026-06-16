@@ -285,9 +285,17 @@ def get_services():
              '--no-legend', '--no-pager'],
             capture_output=True, text=True, timeout=10)
         for line in r.stdout.strip().split('\n'):
-            parts = line.split(maxsplit=4)
-            if len(parts) >= 4 and parts[0].endswith('.service'):
-                svcs[parts[0]] = {'active': parts[2], 'sub': parts[3], 'enabled': ''}
+            fields = line.split()
+            if not fields:
+                continue
+            # 行首可能有状态圆点（●/*，systemd 对 failed/activating 会标色），
+            # 以 .service 结尾的单元名为锚点定位，避免圆点导致整行被跳过。
+            idx = next((j for j, t in enumerate(fields)
+                        if t.endswith('.service')), None)
+            if idx is None or len(fields) < idx + 4:
+                continue
+            svcs[fields[idx]] = {'active': fields[idx + 2],
+                                 'sub': fields[idx + 3], 'enabled': ''}
     except:
         pass
 
@@ -297,14 +305,21 @@ def get_services():
              '--no-legend', '--no-pager'],
             capture_output=True, text=True, timeout=10)
         for line in r.stdout.strip().split('\n'):
-            parts = line.split(maxsplit=1)
-            if len(parts) >= 2 and parts[0] in svcs:
-                svcs[parts[0]]['enabled'] = parts[1]
+            parts = line.split()  # UNIT-FILE  STATE  [VENDOR-PRESET]
+            if len(parts) < 2 or not parts[0].endswith('.service'):
+                continue
+            name, state = parts[0], parts[1]
+            if name in svcs:
+                svcs[name]['enabled'] = state
+            else:
+                # 已安装但从未启动/加载的自定义服务也补进来，确保可见
+                svcs[name] = {'active': 'inactive', 'sub': 'dead', 'enabled': state}
     except:
         pass
 
     result = [(n, v['active'], v['sub'], v['enabled']) for n, v in svcs.items()]
-    result.sort(key=lambda x: x[0])
+    # 排序：已启动（active）在前，未启动在后；组内按名称首字母（不区分大小写）排
+    result.sort(key=lambda x: (0 if x[1] == 'active' else 1, x[0].lower()))
     return result
 
 
