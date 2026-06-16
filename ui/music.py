@@ -4,7 +4,7 @@
 保持 UI 无状态约定。列表支持上下滚动浏览。
 """
 from color import (
-    BLACK, WHITE, GREEN, CYAN, MAGENTA, ORANGE, DGRAY, LGRAY, CARD,
+    BLACK, WHITE, GREEN, CYAN, MAGENTA, ORANGE, DGRAY, LGRAY, CARD, TRACK,
 )
 
 ROWS_PER_PAGE = 6
@@ -89,5 +89,71 @@ def draw_music(disp, songs, cursor=0, scroll=0,
     disp.draw_text_pil(W - 14 - disp.text_width_pil(st_text, 12), H - 38,
                        st_text, st_clr, size=12)
 
-    disp.draw_text_pil(6, H - 12, "↑↓选择  Enter播放/暂停  Esc返回", DGRAY, size=10)
+    disp.draw_text_pil(6, H - 12, "↑↓选择  Enter播放  Esc返回", DGRAY, size=10)
+    disp.flush()
+
+
+def _fmt_time(sec):
+    """秒数格式化为 m:ss"""
+    sec = int(max(0, sec))
+    return f"{sec // 60}:{sec % 60:02d}"
+
+
+def draw_now_playing(disp, song, status, elapsed, duration):
+    """绘制“正在播放”详情页（含音频进度条）
+
+    参数：
+      song     — 当前曲目 {name, artist}
+      status   — 'playing'/'paused'/'stopped'
+      elapsed  — 已播放秒数
+      duration — 总时长秒数（0 表示未知）
+    """
+    W = disp.width
+    H = disp.height
+    disp.fill_screen(BLACK)
+
+    # 顶栏标题
+    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
+    disp.draw_text_pil(16, 11, "正在播放", CYAN, size=16)
+
+    # 曲名（居中，过长截断）
+    name = song.get('name', '') if song else ''
+    if len(name) > 14:
+        name = name[:13] + '…'
+    nw, _ = disp.text_size_pil(name, 24)
+    disp.draw_text_pil((W - nw) // 2, 66, name, WHITE, size=24)
+
+    # 歌手（居中）
+    artist = song.get('artist', '') if song else ''
+    if artist:
+        aw, _ = disp.text_size_pil(artist, 14)
+        disp.draw_text_pil((W - aw) // 2, 104, artist, LGRAY, size=14)
+
+    # 进度条
+    bar_x, bar_y, bar_w, bar_h = 24, 150, W - 48, 10
+    disp.fill_round_rect(bar_x, bar_y, bar_w, bar_h, bar_h // 2, TRACK)
+    frac = (elapsed / duration) if duration > 0 else 0.0
+    frac = max(0.0, min(1.0, frac))
+    fw = int(bar_w * frac)
+    if fw > 0:
+        disp.fill_round_rect(bar_x, bar_y, max(fw, bar_h), bar_h,
+                             bar_h // 2, MAGENTA)
+
+    # 时间标签：已播放 / 总时长
+    disp.draw_text_pil(bar_x, bar_y + 16, _fmt_time(elapsed), LGRAY, size=11)
+    total_str = _fmt_time(duration) if duration > 0 else "--:--"
+    disp.draw_text_pil(bar_x + bar_w - disp.text_width_pil(total_str, 11),
+                       bar_y + 16, total_str, LGRAY, size=11)
+
+    # 状态
+    st_text = _STATUS_TEXT.get(status, '')
+    st_clr = _STATUS_COLOR.get(status, LGRAY)
+    sw, _ = disp.text_size_pil(st_text, 14)
+    disp.draw_text_pil((W - sw) // 2, 192, st_text, st_clr, size=14)
+
+    # 操作提示
+    hint = "Enter 播放/暂停  ←→ 切歌  Esc 返回"
+    hw, _ = disp.text_size_pil(hint, 10)
+    disp.draw_text_pil((W - hw) // 2, H - 13, hint, DGRAY, size=10)
+
     disp.flush()

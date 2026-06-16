@@ -10,7 +10,7 @@ import glob
 from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_menu, draw_music,
-    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
+    draw_now_playing, move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
 )
 from ui.services import ROWS_PER_PAGE as SVC_ROWS
 from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
@@ -89,6 +89,17 @@ def main():
     last_sample = 0.0
     need_render = True
 
+    def play_song(i):
+        """播放第 i 首并记录为当前曲目；成功返回 True"""
+        nonlocal music_playing_index
+        song = music_songs[i]
+        dur = song.get('duration', 0) / 1000.0
+        if player.play(get_song_url(song['id']), dur):
+            music_playing_index = i
+            print(f"[音乐] 播放: {song['name']} - {song['artist']}")
+            return True
+        return False
+
     try:
         while True:
             # 每秒采样一次系统信息（与页面无关，保持历史与日志连续）
@@ -124,6 +135,16 @@ def main():
                 music_loading = _raw is None
                 music_songs = _raw or []
 
+            # 自动连播：当前曲目自然播放结束则切下一首
+            if music_playing_index >= 0 and player.status() == 'stopped':
+                nxt = music_playing_index + 1
+                if nxt < len(music_songs):
+                    play_song(nxt)
+                    if view in ('music', 'playing'):
+                        need_render = True
+                else:
+                    music_playing_index = -1
+
             if need_render:
                 if view == 'menu':
                     draw_menu(disp, MENU_ITEMS, menu_cursor)
@@ -144,6 +165,12 @@ def main():
                 elif view == 'music':
                     draw_music(disp, music_songs, music_cursor, music_scroll,
                                music_playing_index, player.status(), music_loading)
+                elif view == 'playing':
+                    cur_song = (music_songs[music_playing_index]
+                                if 0 <= music_playing_index < len(music_songs)
+                                else {})
+                    draw_now_playing(disp, cur_song, player.status(),
+                                     player.elapsed(), player.duration())
                 need_render = False
 
             # 细粒度轮询按键，使切换即时响应
@@ -170,9 +197,9 @@ def main():
                     break
                 continue
 
-            # ---------- 子页通用：Esc 返回菜单，q 退出 ----------
+            # ---------- 子页通用：Esc 返回（播放页回列表，其余回菜单），q 退出 ----------
             if key == 'back':
-                view = 'menu'
+                view = 'music' if view == 'playing' else 'menu'
                 need_render = True
                 continue
             if key == 'quit':
@@ -192,7 +219,7 @@ def main():
                         services_scroll = services_cursor - SVC_ROWS + 1
                     need_render = True
 
-            # ---------- 音乐播放页 ----------
+            # ---------- 音乐列表页 ----------
             elif view == 'music':
                 if key == 'up' and music_cursor > 0:
                     music_cursor -= 1
@@ -206,14 +233,21 @@ def main():
                         music_scroll = music_cursor - MUSIC_ROWS + 1
                     need_render = True
                 elif key == 'enter' and music_songs:
-                    if music_cursor == music_playing_index and \
-                            player.status() != 'stopped':
-                        player.toggle_pause()
-                    else:
-                        song = music_songs[music_cursor]
-                        if player.play(get_song_url(song['id'])):
-                            music_playing_index = music_cursor
-                            print(f"[音乐] 播放: {song['name']} - {song['artist']}")
+                    play_song(music_cursor)
+                    view = 'playing'  # 跳转到正在播放页
+                    need_render = True
+
+            # ---------- 正在播放页 ----------
+            elif view == 'playing':
+                if key == 'enter':
+                    player.toggle_pause()
+                    need_render = True
+                elif key == 'left' and music_playing_index > 0:
+                    play_song(music_playing_index - 1)
+                    need_render = True
+                elif key == 'right' and \
+                        music_playing_index < len(music_songs) - 1:
+                    play_song(music_playing_index + 1)
                     need_render = True
     except KeyboardInterrupt:
         pass

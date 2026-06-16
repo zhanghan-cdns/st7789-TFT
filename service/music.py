@@ -9,6 +9,7 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 
@@ -37,7 +38,10 @@ def _parse_track(t):
     """从单曲 JSON 提取 {id, name, artist}，兼容新旧字段名"""
     artists = t.get('artists') or t.get('ar') or []
     artist = '/'.join(a.get('name', '') for a in artists if a.get('name'))
-    return {'id': t.get('id'), 'name': t.get('name', ''), 'artist': artist}
+    # 总时长（毫秒）：旧接口为 duration，新接口为 dt
+    duration = t.get('duration') or t.get('dt') or 0
+    return {'id': t.get('id'), 'name': t.get('name', ''),
+            'artist': artist, 'duration': duration}
 
 
 def get_hot_playlist(limit=30):
@@ -89,6 +93,10 @@ class MusicPlayer:
     def __init__(self):
         self._proc = None
         self._paused = False
+        self._duration = 0.0      # 当前曲目总时长（秒）
+        self._start = 0.0         # 播放起始 monotonic 时间
+        self._paused_accum = 0.0  # 累计暂停时长（秒）
+        self._pause_start = None  # 本次暂停起点
         self._cmd = None
         for name, cmd in _PLAYERS:
             if shutil.which(cmd[0]):
@@ -101,8 +109,11 @@ class MusicPlayer:
     def available(self):
         return self._cmd is not None
 
-    def play(self, url):
-        """播放指定直链，先停止当前播放"""
+    def play(self, url, duration=0):
+        """播放指定直链，先停止当前播放
+
+        duration —— 曲目总时长（秒），用于进度条；未知可传 0。
+        """
         self.stop()
         if not self._cmd:
             return False
@@ -111,6 +122,10 @@ class MusicPlayer:
                 self._cmd + [url],
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             self._paused = False
+            self._duration = max(0.0, duration)
+            self._start = time.monotonic()
+            self._paused_accum = 0.0
+            self._pause_start = None
             return True
         except Exception as e:
             print(f"[音乐] 播放失败: {e}")
@@ -124,6 +139,12 @@ class MusicPlayer:
         try:
             sig = signal.SIGCONT if self._paused else signal.SIGSTOP
             os.kill(self._proc.pid, sig)
+            if self._paused:  # 恢复：累计本次暂停时长
+                if self._pause_start is not None:
+                    self._paused_accum += time.monotonic() - self._pause_start
+                self._pause_start = None
+            else:             # 暂停：记录起点
+                self._pause_start = time.monotonic()
             self._paused = not self._paused
         except Exception as e:
             print(f"[音乐] 暂停切换失败: {e}")
@@ -140,6 +161,7 @@ class MusicPlayer:
                 pass
             self._proc = None
         self._paused = False
+        self._pause_start = None
 
     def status(self):
         """返回 'playing' / 'paused' / 'stopped'（自动检测播放结束）"""
@@ -148,5 +170,21 @@ class MusicPlayer:
         if self._proc.poll() is not None:
             self._proc = None
             self._paused = False
+            self._pause_start = None
             return 'stopped'
         return 'paused' if self._paused else 'playing'
+
+    def duration(self):
+        """当前曲目总时长（秒），未知为 0"""
+        return self._duration
+
+    def elapsed(self):
+        """已播放时长（秒，估算，扣除暂停时间）"""
+        if self._proc is None or self._proc.poll() is not None:
+            return 0.0
+        sec = time.monotonic() - self._start - self._paused_accum
+        if self._paused and self._pause_start is not None:
+            sec -= time.monotonic() - self._pause_start
+        if self._duration > 0:
+            sec = min(sec, self._duration)
+        return max(0.0, sec)
