@@ -87,8 +87,11 @@ def get_memory():
     return round(used / 1024, 1), round(total / 1024, 1), pct
 
 
+_wifi_cache = ('', 0, 0)
+
 def get_wifi_info():
-    """返回 (ssid, signal_dbm, quality_pct)，未连接返回 ('', 0, 0)"""
+    """返回 (ssid, signal_dbm, quality_pct)，失败时沿用上次缓存"""
+    global _wifi_cache
     try:
         r = subprocess.run(
             ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL', 'dev', 'wifi', 'list'],
@@ -99,10 +102,11 @@ def get_wifi_info():
                 ssid = parts[1]
                 signal = int(parts[2])
                 dbm = -90 + int(signal * 60 / 100)
-                return ssid, dbm, signal
+                _wifi_cache = (ssid, dbm, signal)
+                return _wifi_cache
     except:
         pass
-    return '', 0, 0
+    return _wifi_cache
 
 
 # ==================== 网络地址 ====================
