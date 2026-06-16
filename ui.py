@@ -100,8 +100,8 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
         disp.draw_text_pil(x + w - 8 - disp.text_width_pil(note, 10), y + 10, note, LGRAY, size=10)
     if pct is not None:
         bar_h = 12
-        bar_y = y + 30
-        bar_gap = 8
+        bar_y = y + 32
+        bar_gap = 14
         tw, th = disp.text_size_pil(value, 20)
         bar_w = w - 24 - bar_gap - tw
         if bar_w < 20:
@@ -195,7 +195,7 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
 
     # --- 内存 进度条卡片 ---
     # 复用 _metric_card，使用进度条模式
-    mem_note = f"{mem_used:.0f}/{mem_total:.0f}MB"
+    mem_note = f"{mem_used/1024:.1f}/{mem_total/1024:.1f}GB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
                  f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
 
