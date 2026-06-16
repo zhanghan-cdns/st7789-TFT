@@ -9,7 +9,7 @@ import glob
 import subprocess
 
 from st7789_driver import ST7789
-from ui import draw_dashboard
+from ui import draw_dashboard, CPU_HISTORY_LEN
 
 
 # ==================== 系统信息读取 ====================
@@ -181,7 +181,7 @@ def main():
         while True:
             cpu = get_cpu_usage()
             cpu_history.append(cpu)
-            if len(cpu_history) > 60:
+            if len(cpu_history) > CPU_HISTORY_LEN:
                 cpu_history.pop(0)
             cpu_temp = get_cpu_temp()
             fan_val, fan_unit = get_fan_rpm()
