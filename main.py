@@ -67,7 +67,8 @@ class _KeyReader:
                     print(f"[按键] 打开 {path} 失败: {e}")
         if self._evfds:
             self.mode = 'evdev'
-            print(f"[按键] 使用 evdev，监听 {len(self._evfds)} 个输入设备")
+            print(f"[按键] 使用 evdev，监听 {len(self._evfds)} 个输入设备，"
+                  f"_EV_SIZE={_EV_SIZE}")
             return
 
         # 2) 回退：终端 stdin 方向键
@@ -102,10 +103,10 @@ class _KeyReader:
             for off in range(0, len(data) - _EV_SIZE + 1, _EV_SIZE):
                 _, _, etype, code, value = struct.unpack(
                     _EV_FMT, data[off:off + _EV_SIZE])
-                if etype == _EV_KEY and value == 1:  # 仅按下沿
+                if etype == _EV_KEY:
                     if self.debug:
-                        print(f"[按键] keycode={code}")
-                    if code in _KEYMAP:
+                        print(f"[按键] EV_KEY code={code} value={value}")
+                    if value == 1 and code in _KEYMAP:  # 仅按下沿
                         return _KEYMAP[code]
         return None
 
