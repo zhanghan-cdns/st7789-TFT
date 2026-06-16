@@ -16,6 +16,7 @@ import subprocess
 
 from st7789_driver import ST7789
 from ui import draw_dashboard, draw_clock, draw_services, lunar_date_str, CPU_HISTORY_LEN
+from ui.services import ROWS_PER_PAGE
 
 # 页面：0=系统监控，1=时钟，2=系统服务
 NUM_PAGES = 3
@@ -302,9 +303,8 @@ def get_services():
     except:
         pass
 
-    order = {'running': 0, 'failed': 1, 'inactive': 2, 'dead': 3}
     result = [(n, v['active'], v['sub'], v['enabled']) for n, v in svcs.items()]
-    result.sort(key=lambda x: (order.get(x[2], 9), x[0]))
+    result.sort(key=lambda x: x[0])
     return result
 
 
@@ -410,6 +410,7 @@ def main():
 
     # 多页状态与按键读取
     page = 0
+    services_cursor = 0
     services_scroll = 0
     keys = _KeyReader()
     print("← →切换页面（系统监控/时钟/系统服务），↑↓滚动服务列表，q 退出")
@@ -476,7 +477,7 @@ def main():
                                WEEKDAYS[lt.tm_wday],
                                lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
                 else:
-                    draw_services(disp, services_data, services_scroll)
+                    draw_services(disp, services_data, services_cursor, services_scroll)
                 need_render = False
 
             # 细粒度轮询按键，使切换即时响应
@@ -490,16 +491,18 @@ def main():
                 need_render = True
                 print(f"[按键] 右 -> 切换到页面 {page}")
             elif key == 'up':
-                if page == 2 and services_data:
-                    svc_total = len(services_data)
-                    services_scroll = max(0, services_scroll - 1)
-                    print(f"[按键] 上 -> 服务滚动到 {services_scroll}")
+                if page == 2 and services_cursor > 0:
+                    services_cursor -= 1
+                    if services_cursor < services_scroll:
+                        services_scroll = services_cursor
+                    print(f"[按键] 上 -> 光标 {services_cursor}")
                     need_render = True
             elif key == 'down':
-                if page == 2 and services_data:
-                    max_scroll = max(0, len(services_data) - 1)
-                    services_scroll = min(max_scroll, services_scroll + 1)
-                    print(f"[按键] 下 -> 服务滚动到 {services_scroll}")
+                if page == 2 and services_data and services_cursor < len(services_data) - 1:
+                    services_cursor += 1
+                    if services_cursor >= services_scroll + ROWS_PER_PAGE:
+                        services_scroll = services_cursor - ROWS_PER_PAGE + 1
+                    print(f"[按键] 下 -> 光标 {services_cursor}")
                     need_render = True
             elif key == 'quit':
                 break

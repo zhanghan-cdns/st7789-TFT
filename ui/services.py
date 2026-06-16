@@ -5,8 +5,8 @@
 """
 from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD
 
-ROWS_PER_PAGE = 11
-ROW_HEIGHT = 18
+ROWS_PER_PAGE = 7
+ROW_HEIGHT = 24
 
 
 def _active_color(sub):
@@ -37,7 +37,7 @@ def _active_label(sub):
             'dead': '停止', 'inactive': '未激活'}.get(sub, sub)
 
 
-def draw_services(disp, services, scroll=0):
+def draw_services(disp, services, cursor=0, scroll=0):
     """绘制系统服务列表"""
     W = disp.width
     H = disp.height
@@ -48,7 +48,7 @@ def draw_services(disp, services, scroll=0):
     disp.draw_text_pil(16, 11, "系统服务", CYAN, size=16)
     max_page = max((total + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE, 1)
     cur_page = scroll // ROWS_PER_PAGE + 1
-    info = f"共 {total} 个 第 {cur_page}/{max_page} 页"
+    info = f"共 {total} 个 第 {cur_page}/{max_page} 页  光标 {cursor+1}/{total}"
     disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 15, info, WHITE, size=10)
 
     start = scroll
@@ -60,20 +60,24 @@ def draw_services(disp, services, scroll=0):
         display_name = name
         if display_name.endswith('.service'):
             display_name = display_name[:-8]
-        if len(display_name) > 20:
-            display_name = display_name[:18] + '..'
+        if len(display_name) > 24:
+            display_name = display_name[:22] + '..'
+
+        if i == cursor:
+            disp.fill_rect(6, y, W - 12, ROW_HEIGHT, 0x3186)
 
         dot_color = _active_color(sub)
-        disp.fill_circle(16, y + 6, 4, dot_color)
+        disp.fill_circle(16, y + ROW_HEIGHT // 2, 5, dot_color)
 
-        disp.draw_text_pil(26, y, display_name, WHITE, size=10)
+        name_clr = WHITE if i != cursor else CYAN
+        disp.draw_text_pil(28, y + 2, display_name, name_clr, size=12)
 
         en_label = _enabled_label(enabled)
         en_color = _enabled_color(enabled)
-        en_w = disp.text_width_pil(en_label, 10)
-        disp.draw_text_pil(W - 14 - en_w, y, en_label, en_color, size=10)
+        en_w = disp.text_width_pil(en_label, 12)
+        disp.draw_text_pil(W - 14 - en_w, y + 2, en_label, en_color, size=12)
 
         y += ROW_HEIGHT
 
-    disp.draw_text_pil(6, H - 12, "↑↓滚动  ←→翻页", DGRAY, size=10)
+    disp.draw_text_pil(6, H - 12, "↑↓选择  ←→翻页", DGRAY, size=10)
     disp.flush()
