@@ -195,7 +195,7 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
 
     # --- 内存 进度条卡片 ---
     # 复用 _metric_card，使用进度条模式
-    mem_note = f"{mem_used/1024:.1f}/{mem_total/1024:.1f}GB"
+    mem_note = f"{mem_used:.0f}MB / {mem_total/1024:.1f}GB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
                  f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
 
