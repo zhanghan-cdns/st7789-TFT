@@ -8,6 +8,7 @@ import os
 import sys
 import glob
 import select
+import struct
 import termios
 import tty
 import subprocess
@@ -21,36 +22,96 @@ WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'
 
 
 # ==================== 键盘输入 ====================
-class _KeyReader:
-    """非阻塞读取终端方向键（Linux）。
+# Linux input_event 结构：long sec, long usec, u16 type, u16 code, s32 value
+_EV_FMT = 'llHHi'
+_EV_SIZE = struct.calcsize(_EV_FMT)
+_EV_KEY = 0x01           # 按键事件类型
+# 键码（include/uapi/linux/input-event-codes.h）
+_KEY_ESC = 1
+_KEY_Q = 16
+_KEY_LEFT = 105
+_KEY_RIGHT = 106
+# 键码 -> 动作映射
+_KEYMAP = {
+    _KEY_LEFT: 'left',
+    _KEY_RIGHT: 'right',
+    _KEY_Q: 'quit',
+    _KEY_ESC: 'quit',
+}
 
-    进入 cbreak 模式后用 select 轮询 stdin，识别左右方向键的转义
-    序列（ESC [ D / ESC [ C）。非 TTY 环境（如 systemd 服务）下自动
-    禁用，poll 退化为普通休眠，功能优雅降级。
+
+class _KeyReader:
+    """读取物理键盘按键（Linux）。
+
+    优先直接读取输入事件设备 /dev/input/event*（evdev）：由内核输入层
+    提供按键事件，不依赖终端焦点，适用于设备上直插键盘的场景（需要对
+    输入设备的读权限，通常需 root 或加入 input 组）。若无法打开任何输入
+    设备，则回退到读取终端 stdin 的方向键转义序列。
     """
 
     def __init__(self, debug=True):
         self.debug = debug
-        self.enabled = sys.stdin.isatty()
-        self._fd = None
-        self._old = None
-        if self.enabled:
-            self._fd = sys.stdin.fileno()
-            self._old = termios.tcgetattr(self._fd)
-            tty.setcbreak(self._fd)
-        print(f"[按键] 检测到终端(TTY)={self.enabled}")
+        self.mode = None
+        self._evfds = []
+        self._tty_fd = None
+        self._tty_old = None
+
+        # 1) 优先 evdev：打开所有可读的输入事件设备
+        for path in sorted(glob.glob('/dev/input/event*')):
+            try:
+                self._evfds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK))
+            except OSError as e:
+                if self.debug:
+                    print(f"[按键] 打开 {path} 失败: {e}")
+        if self._evfds:
+            self.mode = 'evdev'
+            print(f"[按键] 使用 evdev，监听 {len(self._evfds)} 个输入设备")
+            return
+
+        # 2) 回退：终端 stdin 方向键
+        if sys.stdin.isatty():
+            self.mode = 'tty'
+            self._tty_fd = sys.stdin.fileno()
+            self._tty_old = termios.tcgetattr(self._tty_fd)
+            tty.setcbreak(self._tty_fd)
+            print("[按键] 无可用输入设备，回退到终端 stdin")
+        else:
+            print("[按键] 无可用输入设备，且非终端，按键功能禁用"
+                  "（直插键盘请用 sudo 运行以读取 /dev/input/event*）")
 
     def poll(self, timeout):
         """等待至多 timeout 秒，返回 'left'/'right'/'quit' 或 None"""
-        if not self.enabled:
-            time.sleep(timeout)
+        if self.mode == 'evdev':
+            return self._poll_evdev(timeout)
+        if self.mode == 'tty':
+            return self._poll_tty(timeout)
+        time.sleep(timeout)
+        return None
+
+    def _poll_evdev(self, timeout):
+        r, _, _ = select.select(self._evfds, [], [], timeout)
+        if not r:
             return None
+        for fd in r:
+            try:
+                data = os.read(fd, _EV_SIZE * 64)
+            except OSError:
+                continue
+            for off in range(0, len(data) - _EV_SIZE + 1, _EV_SIZE):
+                _, _, etype, code, value = struct.unpack(
+                    _EV_FMT, data[off:off + _EV_SIZE])
+                if etype == _EV_KEY and value == 1:  # 仅按下沿
+                    if self.debug:
+                        print(f"[按键] keycode={code}")
+                    if code in _KEYMAP:
+                        return _KEYMAP[code]
+        return None
+
+    def _poll_tty(self, timeout):
         r, _, _ = select.select([sys.stdin], [], [], timeout)
         if not r:
             return None
-        # 一次性读尽可用字节：方向键是多字节转义序列（如 b'\x1b[D'），
-        # 分两次读取易因竞态漏读。
-        data = os.read(self._fd, 8)
+        data = os.read(self._tty_fd, 8)
         if self.debug:
             print(f"[按键] 读到原始字节: {data!r}")
         if data == b'\x1b[D':
@@ -62,8 +123,13 @@ class _KeyReader:
         return None
 
     def restore(self):
-        if self.enabled and self._old is not None:
-            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old)
+        for fd in self._evfds:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        if self.mode == 'tty' and self._tty_old is not None:
+            termios.tcsetattr(self._tty_fd, termios.TCSADRAIN, self._tty_old)
 
 
 # ==================== 系统信息读取 ====================
