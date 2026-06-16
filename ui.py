@@ -6,6 +6,7 @@
 """
 from color import (
     BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD, TRACK,
+    CPU_CLR, MEM_CLR,
 )
 
 # CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
@@ -172,10 +173,10 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     # 卡片内从上到下：标题行（左侧圆点 + "CPU" 标签 + 右上角当前百分比）
     #               折线图区域（历史数据连线）
     disp.fill_round_rect(6, 38, W - 12, 60, 8, CARD)
-    disp.fill_circle(18, 50, 5, CYAN)
+    disp.fill_circle(18, 50, 5, CPU_CLR)
     disp.draw_text_pil(29, 46, "CPU", LGRAY, size=10)
     pct_text = f"{cpu_pct:.0f}%"
-    disp.draw_text_pil(W - 14 - disp.text_width_pil(pct_text, 10), 46, pct_text, CYAN, size=10)
+    disp.draw_text_pil(W - 14 - disp.text_width_pil(pct_text, 10), 46, pct_text, CPU_CLR, size=10)
     if len(cpu_history) >= 2:
         cx, cy = 12, 66
         cw = W - 24       # 充分利用卡片宽度（左右内边距各 6）
@@ -191,13 +192,13 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
             py = cy + ch - 1 - int((pv / 100) * (ch - 1))
             pts.append((px, py))
         for i in range(len(pts) - 1):
-            disp.draw_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], CYAN)
+            disp.draw_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], CPU_CLR)
 
     # --- 内存 进度条卡片 ---
     # 复用 _metric_card，使用进度条模式
     mem_note = f"{mem_used:.0f}MB / {mem_total/1024:.1f}GB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
-                 f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
+                 f"{mem_pct:.0f}%", MEM_CLR, pct=mem_pct, note=mem_note, dot_color=MEM_CLR)
 
     # --- 底部三列卡片：NET / 核心温度 / 风扇转速 ---
     # 每列宽度均分，8px 间隔
