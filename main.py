@@ -5,11 +5,64 @@
 """
 import time
 import os
+import sys
 import glob
+import select
+import termios
+import tty
 import subprocess
 
 from st7789_driver import ST7789
-from ui import draw_dashboard, CPU_HISTORY_LEN
+from ui import draw_dashboard, draw_clock, CPU_HISTORY_LEN
+
+# 页面：0=系统监控，1=时钟
+NUM_PAGES = 2
+WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+
+
+# ==================== 键盘输入 ====================
+class _KeyReader:
+    """非阻塞读取终端方向键（Linux）。
+
+    进入 cbreak 模式后用 select 轮询 stdin，识别左右方向键的转义
+    序列（ESC [ D / ESC [ C）。非 TTY 环境（如 systemd 服务）下自动
+    禁用，poll 退化为普通休眠，功能优雅降级。
+    """
+
+    def __init__(self):
+        self.enabled = sys.stdin.isatty()
+        self._fd = None
+        self._old = None
+        if self.enabled:
+            self._fd = sys.stdin.fileno()
+            self._old = termios.tcgetattr(self._fd)
+            tty.setcbreak(self._fd)
+
+    def poll(self, timeout):
+        """等待至多 timeout 秒，返回 'left'/'right'/'quit' 或 None"""
+        if not self.enabled:
+            time.sleep(timeout)
+            return None
+        r, _, _ = select.select([sys.stdin], [], [], timeout)
+        if not r:
+            return None
+        ch = sys.stdin.read(1)
+        if ch == '\x1b':  # 方向键转义序列
+            r2, _, _ = select.select([sys.stdin], [], [], 0.01)
+            if r2:
+                seq = sys.stdin.read(2)
+                if seq == '[D':
+                    return 'left'
+                if seq == '[C':
+                    return 'right'
+            return None
+        if ch in ('q', 'Q'):
+            return 'quit'
+        return None
+
+    def restore(self):
+        if self.enabled and self._old is not None:
+            termios.tcsetattr(self._fd, termios.TCSADRAIN, self._old)
 
 
 # ==================== 系统信息读取 ====================
@@ -177,32 +230,75 @@ def main():
     net_ip = get_ip_address(net_iface)
     get_cpu_usage()  # 预热，建立 CPU 采样基准
 
+    # 多页状态与按键读取
+    page = 0
+    keys = _KeyReader()
+    print("左右方向键切换页面（系统监控 / 时钟），按 q 退出")
+
+    # 采样数据初值（首帧渲染用）
+    cpu = 0.0
+    cpu_temp = None
+    fan_val = fan_unit = None
+    mem_used = mem_total = mem_pct = 0
+    wifi_ssid, wifi_dbm, wifi_q = '', 0, 0
+    net_down = net_up = 0
+
+    last_sample = 0.0
+    need_render = True
+
     try:
         while True:
-            cpu = get_cpu_usage()
-            cpu_history.append(cpu)
-            if len(cpu_history) > CPU_HISTORY_LEN:
-                cpu_history.pop(0)
-            cpu_temp = get_cpu_temp()
-            fan_val, fan_unit = get_fan_rpm()
-            mem_used, mem_total, mem_pct = get_memory()
-            wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
+            # 每秒采样一次系统信息（与页面无关，保持历史与日志连续）
+            if time.monotonic() - last_sample >= 1.0:
+                last_sample = time.monotonic()
+                cpu = get_cpu_usage()
+                cpu_history.append(cpu)
+                if len(cpu_history) > CPU_HISTORY_LEN:
+                    cpu_history.pop(0)
+                cpu_temp = get_cpu_temp()
+                fan_val, fan_unit = get_fan_rpm()
+                mem_used, mem_total, mem_pct = get_memory()
+                wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
 
-            rx, tx = _read_net_bytes(net_iface)
-            net_down = rx - prev_rx
-            net_up = tx - prev_tx
-            prev_rx, prev_tx = rx, tx
+                rx, tx = _read_net_bytes(net_iface)
+                net_down = rx - prev_rx
+                net_up = tx - prev_tx
+                prev_rx, prev_tx = rx, tx
 
-            temp_s = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
-            print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
-                  f"FAN: {fan_val}{fan_unit or ''}  WiFi: {wifi_ssid} "
-                  f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
-            draw_dashboard(disp, cpu, cpu_history, cpu_temp, fan_val, fan_unit,
-                           mem_used, mem_total, mem_pct,
-                           wifi_ssid, wifi_dbm, wifi_q,
-                           net_down, net_up, net_ip)
-            time.sleep(1)
+                temp_s = f"{cpu_temp:.0f}C" if cpu_temp is not None else "N/A"
+                print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
+                      f"FAN: {fan_val}{fan_unit or ''}  WiFi: {wifi_ssid} "
+                      f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
+                need_render = True  # 数据更新触发重绘（时钟页借此每秒刷新）
+
+            if need_render:
+                if page == 0:
+                    draw_dashboard(disp, cpu, cpu_history, cpu_temp, fan_val, fan_unit,
+                                   mem_used, mem_total, mem_pct,
+                                   wifi_ssid, wifi_dbm, wifi_q,
+                                   net_down, net_up, net_ip)
+                else:
+                    lt = time.localtime()
+                    draw_clock(disp,
+                               time.strftime('%H:%M:%S', lt),
+                               time.strftime('%Y-%m-%d', lt),
+                               WEEKDAYS[lt.tm_wday])
+                need_render = False
+
+            # 细粒度轮询按键，使切换即时响应
+            key = keys.poll(0.05)
+            if key == 'left':
+                page = (page - 1) % NUM_PAGES
+                need_render = True
+            elif key == 'right':
+                page = (page + 1) % NUM_PAGES
+                need_render = True
+            elif key == 'quit':
+                break
     except KeyboardInterrupt:
+        pass
+    finally:
+        keys.restore()
         disp.close()
         print("程序退出")
 
