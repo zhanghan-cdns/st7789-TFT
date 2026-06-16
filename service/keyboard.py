@@ -19,19 +19,23 @@ _EV_SIZE = struct.calcsize(_EV_FMT)
 _EV_KEY = 0x01           # 按键事件类型
 # 键码（include/uapi/linux/input-event-codes.h）
 _KEY_ESC = 1
+_KEY_ENTER = 28
 _KEY_Q = 16
 _KEY_UP = 103
 _KEY_DOWN = 108
 _KEY_LEFT = 105
 _KEY_RIGHT = 106
+_KEY_KPENTER = 96  # 小键盘回车
 # 键码 -> 动作映射
 _KEYMAP = {
     _KEY_UP: 'up',
     _KEY_DOWN: 'down',
     _KEY_LEFT: 'left',
     _KEY_RIGHT: 'right',
+    _KEY_ENTER: 'enter',
+    _KEY_KPENTER: 'enter',
     _KEY_Q: 'quit',
-    _KEY_ESC: 'quit',
+    _KEY_ESC: 'back',
 }
 
 
@@ -120,6 +124,10 @@ class KeyReader:
             return 'left'
         if data == b'\x1b[C':
             return 'right'
+        if data in (b'\r', b'\n'):
+            return 'enter'
+        if data == b'\x1b':  # 单独的 ESC（非方向键转义序列）
+            return 'back'
         if data in (b'q', b'Q'):
             return 'quit'
         return None

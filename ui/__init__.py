@@ -11,11 +11,17 @@ from .dashboard import draw_dashboard, CPU_HISTORY_LEN
 from .clock import draw_clock
 from .lunar import lunar_date_str
 from .services import draw_services
+from .menu import draw_menu, move_cursor, MENU_ITEMS
+from .music import draw_music
 
 __all__ = [
     'draw_dashboard',
     'draw_clock',
     'draw_services',
+    'draw_menu',
+    'draw_music',
+    'move_cursor',
+    'MENU_ITEMS',
     'CPU_HISTORY_LEN',
     'lunar_date_str',
 ]

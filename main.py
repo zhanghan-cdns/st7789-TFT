@@ -8,17 +8,20 @@ import sys
 import glob
 
 from st7789_driver import ST7789
-from ui import draw_dashboard, draw_clock, draw_services, lunar_date_str, CPU_HISTORY_LEN
-from ui.services import ROWS_PER_PAGE
+from ui import (
+    draw_dashboard, draw_clock, draw_services, draw_menu, draw_music,
+    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
+)
+from ui.services import ROWS_PER_PAGE as SVC_ROWS
+from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
 from service import (
     KeyReader, BackgroundSampler,
     get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory,
     get_wifi_info, get_ip_address, get_services,
     detect_net_iface, read_net_bytes,
+    MusicPlayer, get_hot_playlist, get_song_url,
 )
 
-# 页面：0=系统监控，1=时钟，2=系统服务
-NUM_PAGES = 3
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 
@@ -51,12 +54,20 @@ def main():
     net_ip = get_ip_address(net_iface)
     get_cpu_usage()  # 预热，建立 CPU 采样基准
 
-    # 多页状态与按键读取
-    page = 0
+    # 视图状态：'menu' 首页 / 'dashboard' / 'clock' / 'services' / 'music'
+    view = 'menu'
+    menu_cursor = 0
     services_cursor = 0
     services_scroll = 0
+    music_cursor = 0
+    music_scroll = 0
+    music_playing_index = -1
+    music_songs = []
+    music_loading = False
     keys = KeyReader()
-    print("← →切换页面（系统监控/时钟/系统服务），↑↓滚动服务列表，q 退出")
+    player = MusicPlayer()
+    music_sampler = None  # 进入音乐页时再懒加载歌单
+    print("九宫格菜单：↑↓←→选择，Enter 进入，Esc 返回，q 退出")
 
     # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
     wifi_sampler = BackgroundSampler(get_wifi_info, 8.0, initial=('', 0, 0))
@@ -104,56 +115,114 @@ def main():
                 print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
                       f"FAN: {fan_val}{fan_unit or ''}  WiFi: {wifi_ssid} "
                       f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
-                need_render = True  # 数据更新触发重绘（时钟页借此每秒刷新）
+                if view != 'menu':
+                    need_render = True  # 子页每秒刷新（菜单页保持静态）
+
+            # 音乐歌单后台懒加载：raw 为 None 表示尚未加载完成
+            if music_sampler is not None:
+                _raw = music_sampler.get()
+                music_loading = _raw is None
+                music_songs = _raw or []
 
             if need_render:
-                if page == 0:
+                if view == 'menu':
+                    draw_menu(disp, MENU_ITEMS, menu_cursor)
+                elif view == 'dashboard':
                     draw_dashboard(disp, cpu, cpu_history, cpu_temp, fan_val, fan_unit,
                                    mem_used, mem_total, mem_pct,
                                    wifi_ssid, wifi_dbm, wifi_q,
                                    net_down, net_up, net_ip)
-                elif page == 1:
+                elif view == 'clock':
                     lt = time.localtime()
                     draw_clock(disp,
                                time.strftime('%H:%M:%S', lt),
                                time.strftime('%Y-%m-%d', lt),
                                WEEKDAYS[lt.tm_wday],
                                lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
-                else:
+                elif view == 'services':
                     draw_services(disp, services_data, services_cursor, services_scroll)
+                elif view == 'music':
+                    draw_music(disp, music_songs, music_cursor, music_scroll,
+                               music_playing_index, player.status(), music_loading)
                 need_render = False
 
             # 细粒度轮询按键，使切换即时响应
             key = keys.poll(0.05)
-            if key == 'left':
-                page = (page - 1) % NUM_PAGES
+            if key is None:
+                continue
+
+            # ---------- 菜单页 ----------
+            if view == 'menu':
+                if key in ('up', 'down', 'left', 'right'):
+                    menu_cursor = move_cursor(menu_cursor, key, len(MENU_ITEMS))
+                    need_render = True
+                elif key == 'enter':
+                    target = MENU_ITEMS[menu_cursor]['page']
+                    if target:
+                        view = target
+                        need_render = True
+                        print(f"[菜单] 进入 {target}")
+                        if target == 'music' and music_sampler is None:
+                            music_sampler = BackgroundSampler(
+                                get_hot_playlist, 600.0, initial=None)
+                            music_sampler.start()
+                elif key == 'quit':
+                    break
+                continue
+
+            # ---------- 子页通用：Esc 返回菜单，q 退出 ----------
+            if key == 'back':
+                view = 'menu'
                 need_render = True
-                print(f"[按键] 左 -> 切换到页面 {page}")
-            elif key == 'right':
-                page = (page + 1) % NUM_PAGES
-                need_render = True
-                print(f"[按键] 右 -> 切换到页面 {page}")
-            elif key == 'up':
-                if page == 2 and services_cursor > 0:
+                continue
+            if key == 'quit':
+                break
+
+            # ---------- 系统服务页 ----------
+            if view == 'services':
+                if key == 'up' and services_cursor > 0:
                     services_cursor -= 1
                     if services_cursor < services_scroll:
                         services_scroll = services_cursor
-                    print(f"[按键] 上 -> 光标 {services_cursor}")
                     need_render = True
-            elif key == 'down':
-                if page == 2 and services_data and services_cursor < len(services_data) - 1:
+                elif key == 'down' and services_data and \
+                        services_cursor < len(services_data) - 1:
                     services_cursor += 1
-                    if services_cursor >= services_scroll + ROWS_PER_PAGE:
-                        services_scroll = services_cursor - ROWS_PER_PAGE + 1
-                    print(f"[按键] 下 -> 光标 {services_cursor}")
+                    if services_cursor >= services_scroll + SVC_ROWS:
+                        services_scroll = services_cursor - SVC_ROWS + 1
                     need_render = True
-            elif key == 'quit':
-                break
+
+            # ---------- 音乐播放页 ----------
+            elif view == 'music':
+                if key == 'up' and music_cursor > 0:
+                    music_cursor -= 1
+                    if music_cursor < music_scroll:
+                        music_scroll = music_cursor
+                    need_render = True
+                elif key == 'down' and music_songs and \
+                        music_cursor < len(music_songs) - 1:
+                    music_cursor += 1
+                    if music_cursor >= music_scroll + MUSIC_ROWS:
+                        music_scroll = music_cursor - MUSIC_ROWS + 1
+                    need_render = True
+                elif key == 'enter' and music_songs:
+                    if music_cursor == music_playing_index and \
+                            player.status() != 'stopped':
+                        player.toggle_pause()
+                    else:
+                        song = music_songs[music_cursor]
+                        if player.play(get_song_url(song['id'])):
+                            music_playing_index = music_cursor
+                            print(f"[音乐] 播放: {song['name']} - {song['artist']}")
+                    need_render = True
     except KeyboardInterrupt:
         pass
     finally:
         wifi_sampler.stop()
         services_sampler.stop()
+        if music_sampler is not None:
+            music_sampler.stop()
+        player.stop()
         keys.restore()
         disp.close()
         print("程序退出")
