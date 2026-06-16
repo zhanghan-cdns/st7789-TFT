@@ -2,14 +2,18 @@
 
 依赖 st7789_driver 提供的绘图原语，仅负责 UI 组件与仪表盘的渲染，
 不读取任何系统信息（数据由 main 采集后传入）。
-布局：顶栏 + CPU/内存进度条卡片 + 底部 NET/温度/风扇 3 列卡片。
+布局：顶栏 + CPU折线图 + 内存进度条 + 底部 NET/温度/风扇 3 列卡片。
 """
 from color import (
     BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD, TRACK,
 )
 
+# CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
+CPU_HISTORY_LEN = 60
+
 
 def _load_color(pct):
+    """按负载百分比返回颜色：<60% 绿，<85% 橙，≥85% 红"""
     if pct < 60:
         return GREEN
     if pct < 85:
@@ -18,6 +22,7 @@ def _load_color(pct):
 
 
 def _temp_color(temp):
+    """按温度返回值颜色：<55°C 绿，<70°C 橙，≥70°C 红"""
     if temp is None:
         return LGRAY
     if temp < 55:
@@ -28,6 +33,7 @@ def _temp_color(temp):
 
 
 def _fmt_speed(bps):
+    """将字节/秒格式化为可读字符串：B、K、M 三级"""
     if bps >= 1_000_000:
         return f"{bps/1_000_000:.1f}M"
     if bps >= 1_000:
@@ -37,6 +43,11 @@ def _fmt_speed(bps):
 
 # ==================== UI 组件 ====================
 def draw_bar(disp, x, y, w, h, pct, color):
+    """绘制圆角进度条
+
+    先画 TRACK 色底槽，再按 pct% 比例填充 color 色。
+    pct 自动钳制在 0~100。
+    """
     pct = max(0, min(100, pct))
     r = h // 2
     disp.fill_round_rect(x, y, w, h, r, TRACK)
@@ -46,6 +57,13 @@ def draw_bar(disp, x, y, w, h, pct, color):
 
 
 def draw_wifi_icon(disp, x, y, quality, color=WHITE):
+    """绘制 16x14 WiFi 信号图标
+
+    quality（0~100）决定了点亮几格信号条：
+    75+ → 4 格，50+ → 3 格，25+ → 2 格，1+ → 1 格。
+    未达阈值的使用 DGRAY 暗灰显示。
+    底部圆点始终点亮。
+    """
     off = DGRAY
     c = color if quality >= 75 else off
     disp.fill_rect(x, y, 16, 2, c)
@@ -59,6 +77,20 @@ def draw_wifi_icon(disp, x, y, quality, color=WHITE):
 
 
 def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit="", dot_color=None):
+    """通用单值指标卡片
+
+    布局（从上到下）：
+      1. 圆角矩形背景（CARD 色）
+      2. 左侧圆点 + 标题行（右上可选 note）
+      3. 带进度条的卡片：进度条居左，数值文字居右
+      4. 无进度条的卡片：大数值居中，底部可选单位
+
+    参数：
+      dot_color — 左侧圆点颜色，默认与 color 相同
+      pct       — 不为 None 时显示进度条
+      note      — 标题行右上角备注文字
+      unit      — 底部小字单位
+    """
     if dot_color is None:
         dot_color = color
     disp.fill_round_rect(x, y, w, h, 8, CARD)
@@ -84,6 +116,10 @@ def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit=
 
 
 def _net_card(disp, x, y, w, h, down, up):
+    """网络流量卡片，显示下行（↓）和上行（↑）速率
+
+    下行用 ORANGE，上行用 CYAN 区分。
+    """
     disp.fill_round_rect(x, y, w, h, 8, CARD)
     disp.fill_circle(x + 12, y + 12, 5, ORANGE)
     disp.draw_text_pil(x + 23, y + 10, "NET", LGRAY, size=10)
@@ -93,15 +129,35 @@ def _net_card(disp, x, y, w, h, down, up):
     disp.draw_text_pil(x + 12, y + 52, u_text, CYAN, size=16)
 
 
-# ==================== 仪表盘绘制 ====================
+# ==================== 仪表盘整体绘制 ====================
 def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
                    mem_used, mem_total, mem_pct,
                    wifi_ssid, wifi_dbm, wifi_q,
                    net_down=0, net_up=0, net_ip=None):
+    """绘制完整仪表盘界面
+
+    参数说明：
+      disp       — ST7789 驱动实例
+      cpu_pct    — 当前 CPU 使用率（0~100）
+      cpu_history— CPU 历史数据列表（最多 60 个采样点）
+      cpu_temp   — CPU 温度（°C）或 None
+      fan_val    — 风扇转速值或 PWM%，或 None
+      fan_unit   — 风扇单位（'RPM' / '%'），None 表示无风扇
+      mem_used   — 已用内存（MB）
+      mem_total  — 总内存（MB）
+      mem_pct    — 内存使用率（%）
+      wifi_ssid  — 当前 WiFi SSID，空字符串表示未连接
+      wifi_dbm   — 信号强度（dBm）
+      wifi_q     — 信号质量（0~100）
+      net_down   — 下行速率（字节/秒）
+      net_up     — 上行速率（字节/秒）
+      net_ip     — 网络接口 IP 地址字符串，None 表示无
+    """
     W = disp.width
     disp.fill_screen(BLACK)
 
-    # --- 顶栏 ---
+    # --- 顶栏：标题 + WiFi 信息 ---
+    # 左半：系统监控标题，右半：WiFi 图标 + SSID + IP
     disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
     disp.draw_text_pil(16, 11, "系统监控", CYAN, size=16)
     if wifi_ssid:
@@ -113,19 +169,24 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
         disp.draw_text_pil(W - 14 - disp.text_width_pil(label, 10), 15, label, LGRAY, size=10)
 
     # --- CPU 折线图卡片 ---
+    # 卡片内从上到下：标题行（左侧圆点 + "CPU" 标签 + 右上角当前百分比）
+    #               折线图区域（历史数据连线）
     disp.fill_round_rect(6, 38, W - 12, 60, 8, CARD)
     disp.fill_circle(18, 50, 5, CYAN)
     disp.draw_text_pil(29, 46, "CPU", LGRAY, size=10)
     pct_text = f"{cpu_pct:.0f}%"
     disp.draw_text_pil(W - 14 - disp.text_width_pil(pct_text, 10), 46, pct_text, CYAN, size=10)
     if len(cpu_history) >= 2:
-        cx, cy = 18, 66
-        cw = W - 40
+        cx, cy = 12, 66
+        cw = W - 24       # 充分利用卡片宽度（左右内边距各 6）
         ch = 26
+        # 按固定满量程映射：横轴时间刻度恒定，最新点贴右边缘，
+        # 未填满时曲线只占右侧并向左生长，避免随采样数动态拉伸/抖动。
+        step = (cw - 1) / (CPU_HISTORY_LEN - 1)
         n = len(cpu_history)
         pts = []
         for i, v in enumerate(cpu_history):
-            px = cx + int((i / (n - 1)) * (cw - 1))
+            px = cx + int((cw - 1) - (n - 1 - i) * step)
             pv = max(0, min(100, v))
             py = cy + ch - 1 - int((pv / 100) * (ch - 1))
             pts.append((px, py))
@@ -133,20 +194,23 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
             disp.draw_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], CYAN)
 
     # --- 内存 进度条卡片 ---
+    # 复用 _metric_card，使用进度条模式
     mem_note = f"{mem_used:.0f}/{mem_total:.0f}MB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
                  f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)
 
-    # --- 底部：NET / 核心温度 / 风扇转速 三列 ---
+    # --- 底部三列卡片：NET / 核心温度 / 风扇转速 ---
+    # 每列宽度均分，8px 间隔
     gap = 8
     card_w = (W - 12 - gap * 2) // 3
     x1, x2, x3 = 6, 6 + card_w + gap, 6 + (card_w + gap) * 2
     y_bot = 166
     h_bot = 72
 
+    # 网络流量卡片
     _net_card(disp, x1, y_bot, card_w, h_bot, net_down, net_up)
 
-    # --- 温度卡片（大字体居中）---
+    # 温度卡片（大字体居中显示，如 "56°C"）
     disp.fill_round_rect(x2, y_bot, card_w, h_bot, 8, CARD)
     disp.fill_circle(x2 + 12, y_bot + 12, 5, RED)
     disp.draw_text_pil(x2 + 23, y_bot + 10, "CORE TEMP", LGRAY, size=10)
@@ -159,7 +223,7 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     else:
         disp.draw_text_pil(x2 + 12, y_bot + 26, "N/A", LGRAY, size=24)
 
-    # --- 风扇卡片（数值居中，单位跟在值后）---
+    # 风扇卡片（数值居中，单位如 "%" 或 "RPM" 跟在值后）
     disp.fill_round_rect(x3, y_bot, card_w, h_bot, 8, CARD)
     disp.fill_circle(x3 + 12, y_bot + 12, 5, YELLOW)
     disp.draw_text_pil(x3 + 23, y_bot + 10, "FAN", LGRAY, size=10)
@@ -169,4 +233,5 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     fy = y_bot + 26 + ((h_bot - 26) - th) // 2
     disp.draw_text_pil(fx, fy, fan_text, YELLOW, size=24)
 
+    # 将所有帧缓冲内容一次刷入屏幕
     disp.flush()
