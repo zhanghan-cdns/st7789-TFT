@@ -29,7 +29,8 @@ class _KeyReader:
     禁用，poll 退化为普通休眠，功能优雅降级。
     """
 
-    def __init__(self):
+    def __init__(self, debug=True):
+        self.debug = debug
         self.enabled = sys.stdin.isatty()
         self._fd = None
         self._old = None
@@ -37,6 +38,7 @@ class _KeyReader:
             self._fd = sys.stdin.fileno()
             self._old = termios.tcgetattr(self._fd)
             tty.setcbreak(self._fd)
+        print(f"[按键] 检测到终端(TTY)={self.enabled}")
 
     def poll(self, timeout):
         """等待至多 timeout 秒，返回 'left'/'right'/'quit' 或 None"""
@@ -46,17 +48,16 @@ class _KeyReader:
         r, _, _ = select.select([sys.stdin], [], [], timeout)
         if not r:
             return None
-        ch = sys.stdin.read(1)
-        if ch == '\x1b':  # 方向键转义序列
-            r2, _, _ = select.select([sys.stdin], [], [], 0.01)
-            if r2:
-                seq = sys.stdin.read(2)
-                if seq == '[D':
-                    return 'left'
-                if seq == '[C':
-                    return 'right'
-            return None
-        if ch in ('q', 'Q'):
+        # 一次性读尽可用字节：方向键是多字节转义序列（如 b'\x1b[D'），
+        # 分两次读取易因竞态漏读。
+        data = os.read(self._fd, 8)
+        if self.debug:
+            print(f"[按键] 读到原始字节: {data!r}")
+        if data == b'\x1b[D':
+            return 'left'
+        if data == b'\x1b[C':
+            return 'right'
+        if data in (b'q', b'Q'):
             return 'quit'
         return None
 
@@ -290,9 +291,11 @@ def main():
             if key == 'left':
                 page = (page - 1) % NUM_PAGES
                 need_render = True
+                print(f"[按键] 左 -> 切换到页面 {page}")
             elif key == 'right':
                 page = (page + 1) % NUM_PAGES
                 need_render = True
+                print(f"[按键] 右 -> 切换到页面 {page}")
             elif key == 'quit':
                 break
     except KeyboardInterrupt:
