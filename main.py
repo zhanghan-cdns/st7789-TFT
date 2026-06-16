@@ -57,7 +57,9 @@ class _KeyReader:
         self._tty_old = None
 
         # 1) 优先 evdev：打开所有可读的输入事件设备
-        for path in sorted(glob.glob('/dev/input/event*')):
+        paths = sorted(glob.glob('/dev/input/event*'))
+        print(f"[按键] 扫描到输入设备: {paths}")
+        for path in paths:
             try:
                 self._evfds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK))
             except OSError as e:
@@ -275,6 +277,11 @@ def _read_net_bytes(iface):
 
 # ==================== 主程序 ====================
 def main():
+    # 强制行缓冲，避免输出被重定向/后台运行时 print 迟迟不刷新
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except Exception:
+        pass
     print("ST7789 初始化中...")
     disp = ST7789()
     disp.init()
