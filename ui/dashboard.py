@@ -1,4 +1,4 @@
-"""ST7789 系统监控 UI
+"""系统监控仪表盘（第一屏）
 
 依赖 st7789_driver 提供的绘图原语，仅负责 UI 组件与仪表盘的渲染，
 不读取任何系统信息（数据由 main 采集后传入）。
@@ -235,43 +235,4 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     disp.draw_text_pil(fx, fy, fan_text, YELLOW, size=24)
 
     # 将所有帧缓冲内容一次刷入屏幕
-    disp.flush()
-
-
-# ==================== 时钟页 ====================
-def draw_clock(disp, time_str, date_str, week_str):
-    """绘制时钟页：大字号时间居中，下方显示日期与星期。
-
-    参数（均由 main 采集格式化后传入，保持 UI 不读系统信息）：
-      time_str — 时间字符串，如 "14:23:05"
-      date_str — 日期字符串，如 "2026-06-16"
-      week_str — 星期字符串，如 "周二"
-    """
-    W = disp.width
-    H = disp.height
-    disp.fill_screen(BLACK)
-
-    # 顶栏标题
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "时钟", CYAN, size=16)
-
-    # 主体大卡片
-    card_y, card_h = 42, H - 48
-    disp.fill_round_rect(6, card_y, W - 12, card_h, 8, CARD)
-
-    # 时间 + 日期整体在卡片内垂直居中
-    date_line = f"{date_str}  {week_str}"
-    tw, th = disp.text_size_pil(time_str, 56)
-    dw, dh = disp.text_size_pil(date_line, 18)
-    gap = 18
-    block_h = th + gap + dh
-    start_y = card_y + (card_h - block_h) // 2
-    disp.draw_text_pil((W - tw) // 2, start_y, time_str, WHITE, size=56)
-    disp.draw_text_pil((W - dw) // 2, start_y + th + gap, date_line, LGRAY, size=18)
-
-    # 底部切换提示
-    hint = "\u2190 \u2192 \u5207\u6362"
-    hw, _ = disp.text_size_pil(hint, 10)
-    disp.draw_text_pil((W - hw) // 2, card_y + card_h - 16, hint, DGRAY, size=10)
-
     disp.flush()

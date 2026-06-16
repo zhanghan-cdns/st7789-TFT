@@ -11,10 +11,11 @@ import select
 import struct
 import termios
 import tty
+import threading
 import subprocess
 
 from st7789_driver import ST7789
-from ui import draw_dashboard, draw_clock, CPU_HISTORY_LEN
+from ui import draw_dashboard, draw_clock, lunar_date_str, CPU_HISTORY_LEN
 
 # 页面：0=系统监控，1=时钟
 NUM_PAGES = 2
@@ -234,6 +235,37 @@ def get_wifi_info():
     return '', 0, 0
 
 
+class _WifiSampler:
+    """后台守护线程周期性采集 WiFi 信息。
+
+    nmcli 扫描可能阻塞数秒，若放在主循环会卡住时钟刷新与按键轮询。
+    这里在独立线程里采集，主循环只读最近一次缓存值，永不阻塞。
+    """
+    def __init__(self, interval=8.0):
+        self.interval = interval
+        self._value = ('', 0, 0)
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+
+    def _run(self):
+        while not self._stop.is_set():
+            val = get_wifi_info()
+            with self._lock:
+                self._value = val
+            self._stop.wait(self.interval)
+
+    def get(self):
+        with self._lock:
+            return self._value
+
+    def stop(self):
+        self._stop.set()
+
+
 # ==================== 网络地址 ====================
 def get_ip_address(iface):
     try:
@@ -310,6 +342,10 @@ def main():
     keys = _KeyReader()
     print("左右方向键切换页面（系统监控 / 时钟），按 q 退出")
 
+    # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
+    wifi_sampler = _WifiSampler()
+    wifi_sampler.start()
+
     # 采样数据初值（首帧渲染用）
     cpu = 0.0
     cpu_temp = None
@@ -333,7 +369,7 @@ def main():
                 cpu_temp = get_cpu_temp()
                 fan_val, fan_unit = get_fan_rpm()
                 mem_used, mem_total, mem_pct = get_memory()
-                wifi_ssid, wifi_dbm, wifi_q = get_wifi_info()
+                wifi_ssid, wifi_dbm, wifi_q = wifi_sampler.get()
 
                 rx, tx = _read_net_bytes(net_iface)
                 net_down = rx - prev_rx
@@ -357,7 +393,8 @@ def main():
                     draw_clock(disp,
                                time.strftime('%H:%M:%S', lt),
                                time.strftime('%Y-%m-%d', lt),
-                               WEEKDAYS[lt.tm_wday])
+                               WEEKDAYS[lt.tm_wday],
+                               lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
                 need_render = False
 
             # 细粒度轮询按键，使切换即时响应
@@ -375,6 +412,7 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
+        wifi_sampler.stop()
         keys.restore()
         disp.close()
         print("程序退出")
