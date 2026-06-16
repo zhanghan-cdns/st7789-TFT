@@ -15,10 +15,10 @@ import threading
 import subprocess
 
 from st7789_driver import ST7789
-from ui import draw_dashboard, draw_clock, lunar_date_str, CPU_HISTORY_LEN
+from ui import draw_dashboard, draw_clock, draw_services, lunar_date_str, CPU_HISTORY_LEN
 
-# 页面：0=系统监控，1=时钟
-NUM_PAGES = 2
+# 页面：0=系统监控，1=时钟，2=系统服务
+NUM_PAGES = 3
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 
@@ -30,10 +30,14 @@ _EV_KEY = 0x01           # 按键事件类型
 # 键码（include/uapi/linux/input-event-codes.h）
 _KEY_ESC = 1
 _KEY_Q = 16
+_KEY_UP = 103
+_KEY_DOWN = 108
 _KEY_LEFT = 105
 _KEY_RIGHT = 106
 # 键码 -> 动作映射
 _KEYMAP = {
+    _KEY_UP: 'up',
+    _KEY_DOWN: 'down',
     _KEY_LEFT: 'left',
     _KEY_RIGHT: 'right',
     _KEY_Q: 'quit',
@@ -118,6 +122,10 @@ class _KeyReader:
         data = os.read(self._tty_fd, 8)
         if self.debug:
             print(f"[按键] 读到原始字节: {data!r}")
+        if data == b'\x1b[A':
+            return 'up'
+        if data == b'\x1b[B':
+            return 'down'
         if data == b'\x1b[D':
             return 'left'
         if data == b'\x1b[C':
@@ -266,6 +274,69 @@ class _WifiSampler:
         self._stop.set()
 
 
+# ==================== 系统服务采集 ====================
+def get_services():
+    """返回 [(name, active, sub, enabled), ...] 按状态+名称排序"""
+    svcs = {}
+    try:
+        r = subprocess.run(
+            ['systemctl', 'list-units', '--type=service', '--all',
+             '--no-legend', '--no-pager'],
+            capture_output=True, text=True, timeout=10)
+        for line in r.stdout.strip().split('\n'):
+            parts = line.split(maxsplit=4)
+            if len(parts) >= 4 and parts[0].endswith('.service'):
+                svcs[parts[0]] = {'active': parts[2], 'sub': parts[3], 'enabled': ''}
+    except:
+        pass
+
+    try:
+        r = subprocess.run(
+            ['systemctl', 'list-unit-files', '--type=service',
+             '--no-legend', '--no-pager'],
+            capture_output=True, text=True, timeout=10)
+        for line in r.stdout.strip().split('\n'):
+            parts = line.split(maxsplit=1)
+            if len(parts) >= 2 and parts[0] in svcs:
+                svcs[parts[0]]['enabled'] = parts[1]
+    except:
+        pass
+
+    order = {'running': 0, 'failed': 1, 'inactive': 2, 'dead': 3}
+    result = [(n, v['active'], v['sub'], v['enabled']) for n, v in svcs.items()]
+    result.sort(key=lambda x: (order.get(x[2], 9), x[0]))
+    return result
+
+
+class _ServicesSampler:
+    """后台线程周期性采集系统服务列表"""
+    def __init__(self, interval=30.0):
+        self.interval = interval
+        self._value = []
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+
+    def start(self):
+        self._thread.start()
+        # 首次采集立即执行
+        self._value = get_services()
+
+    def _run(self):
+        while not self._stop.is_set():
+            val = get_services()
+            with self._lock:
+                self._value = val
+            self._stop.wait(self.interval)
+
+    def get(self):
+        with self._lock:
+            return self._value
+
+    def stop(self):
+        self._stop.set()
+
+
 # ==================== 网络地址 ====================
 def get_ip_address(iface):
     try:
@@ -339,12 +410,17 @@ def main():
 
     # 多页状态与按键读取
     page = 0
+    services_scroll = 0
     keys = _KeyReader()
-    print("左右方向键切换页面（系统监控 / 时钟），按 q 退出")
+    print("← →切换页面（系统监控/时钟/系统服务），↑↓滚动服务列表，q 退出")
 
     # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
     wifi_sampler = _WifiSampler()
     wifi_sampler.start()
+
+    # 系统服务采集放到后台线程（每 30 秒刷新一次）
+    services_sampler = _ServicesSampler()
+    services_sampler.start()
 
     # 采样数据初值（首帧渲染用）
     cpu = 0.0
@@ -353,6 +429,7 @@ def main():
     mem_used = mem_total = mem_pct = 0
     wifi_ssid, wifi_dbm, wifi_q = '', 0, 0
     net_down = net_up = 0
+    services_data = services_sampler.get()
 
     last_sample = 0.0
     need_render = True
@@ -371,6 +448,9 @@ def main():
                 mem_used, mem_total, mem_pct = get_memory()
                 wifi_ssid, wifi_dbm, wifi_q = wifi_sampler.get()
 
+                # 刷新服务数据（后台线程每 30 秒自动更新）
+                services_data = services_sampler.get()
+
                 rx, tx = _read_net_bytes(net_iface)
                 net_down = rx - prev_rx
                 net_up = tx - prev_tx
@@ -388,13 +468,15 @@ def main():
                                    mem_used, mem_total, mem_pct,
                                    wifi_ssid, wifi_dbm, wifi_q,
                                    net_down, net_up, net_ip)
-                else:
+                elif page == 1:
                     lt = time.localtime()
                     draw_clock(disp,
                                time.strftime('%H:%M:%S', lt),
                                time.strftime('%Y-%m-%d', lt),
                                WEEKDAYS[lt.tm_wday],
                                lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
+                else:
+                    draw_services(disp, services_data, services_scroll)
                 need_render = False
 
             # 细粒度轮询按键，使切换即时响应
@@ -407,12 +489,25 @@ def main():
                 page = (page + 1) % NUM_PAGES
                 need_render = True
                 print(f"[按键] 右 -> 切换到页面 {page}")
+            elif key == 'up':
+                if page == 2 and services_data:
+                    svc_total = len(services_data)
+                    services_scroll = max(0, services_scroll - 1)
+                    print(f"[按键] 上 -> 服务滚动到 {services_scroll}")
+                    need_render = True
+            elif key == 'down':
+                if page == 2 and services_data:
+                    max_scroll = max(0, len(services_data) - 1)
+                    services_scroll = min(max_scroll, services_scroll + 1)
+                    print(f"[按键] 下 -> 服务滚动到 {services_scroll}")
+                    need_render = True
             elif key == 'quit':
                 break
     except KeyboardInterrupt:
         pass
     finally:
         wifi_sampler.stop()
+        services_sampler.stop()
         keys.restore()
         disp.close()
         print("程序退出")

@@ -10,10 +10,12 @@
 from .dashboard import draw_dashboard, CPU_HISTORY_LEN
 from .clock import draw_clock
 from .lunar import lunar_date_str
+from .services import draw_services
 
 __all__ = [
     'draw_dashboard',
     'draw_clock',
+    'draw_services',
     'CPU_HISTORY_LEN',
     'lunar_date_str',
 ]
