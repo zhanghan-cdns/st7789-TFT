@@ -170,6 +170,8 @@ def main():
         except:
             pass
 
+    cpu_history = []
+
     net_iface = _detect_net_iface()
     prev_rx, prev_tx = _read_net_bytes(net_iface)
     net_ip = get_ip_address(net_iface)
@@ -178,6 +180,9 @@ def main():
     try:
         while True:
             cpu = get_cpu_usage()
+            cpu_history.append(cpu)
+            if len(cpu_history) > 60:
+                cpu_history.pop(0)
             cpu_temp = get_cpu_temp()
             fan_val, fan_unit = get_fan_rpm()
             mem_used, mem_total, mem_pct = get_memory()
@@ -192,7 +197,7 @@ def main():
             print(f"CPU: {cpu:.1f}%  MEM: {mem_pct:.1f}%  TEMP: {temp_s}  "
                   f"FAN: {fan_val}{fan_unit or ''}  WiFi: {wifi_ssid} "
                   f"NET ↓{net_down//1024}K ↑{net_up//1024}K")
-            draw_dashboard(disp, cpu, cpu_temp, fan_val, fan_unit,
+            draw_dashboard(disp, cpu, cpu_history, cpu_temp, fan_val, fan_unit,
                            mem_used, mem_total, mem_pct,
                            wifi_ssid, wifi_dbm, wifi_q,
                            net_down, net_up, net_ip)

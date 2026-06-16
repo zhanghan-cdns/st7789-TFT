@@ -94,7 +94,7 @@ def _net_card(disp, x, y, w, h, down, up):
 
 
 # ==================== 仪表盘绘制 ====================
-def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
+def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
                    mem_used, mem_total, mem_pct,
                    wifi_ssid, wifi_dbm, wifi_q,
                    net_down=0, net_up=0, net_ip=None):
@@ -112,9 +112,27 @@ def draw_dashboard(disp, cpu_pct, cpu_temp, fan_val, fan_unit,
         label = "WiFi --" + (f" {net_ip}" if net_ip else "")
         disp.draw_text_pil(W - 14 - disp.text_width_pil(label, 10), 15, label, LGRAY, size=10)
 
-    # --- CPU / 内存 进度条卡片 ---
-    _metric_card(disp, 6, 38, W - 12, 60, "CPU",
-                 f"{cpu_pct:.0f}%", CYAN, pct=cpu_pct, dot_color=CYAN)
+    # --- CPU 折线图卡片 ---
+    disp.fill_round_rect(6, 38, W - 12, 60, 8, CARD)
+    disp.fill_circle(18, 50, 5, CYAN)
+    disp.draw_text_pil(29, 46, "CPU", LGRAY, size=10)
+    pct_text = f"{cpu_pct:.0f}%"
+    disp.draw_text_pil(W - 14 - disp.text_width_pil(pct_text, 10), 46, pct_text, CYAN, size=10)
+    if len(cpu_history) >= 2:
+        cx, cy = 18, 66
+        cw = W - 40
+        ch = 26
+        n = len(cpu_history)
+        pts = []
+        for i, v in enumerate(cpu_history):
+            px = cx + int((i / (n - 1)) * (cw - 1))
+            pv = max(0, min(100, v))
+            py = cy + ch - 1 - int((pv / 100) * (ch - 1))
+            pts.append((px, py))
+        for i in range(len(pts) - 1):
+            disp.draw_line(pts[i][0], pts[i][1], pts[i+1][0], pts[i+1][1], CYAN)
+
+    # --- 内存 进度条卡片 ---
     mem_note = f"{mem_used:.0f}/{mem_total:.0f}MB"
     _metric_card(disp, 6, 102, W - 12, 60, "MEM",
                  f"{mem_pct:.0f}%", _load_color(mem_pct), pct=mem_pct, note=mem_note, dot_color=GREEN)

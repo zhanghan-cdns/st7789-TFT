@@ -206,6 +206,25 @@ class ST7789:
             off = py * stride + x0 * 2
             self.fbuf[off:off + (x1 - x0) * 2] = pixel * (x1 - x0)
 
+    def draw_line(self, x0, y0, x1, y1, color):
+        """Bresenham 画线"""
+        dx = abs(x1 - x0)
+        dy = -abs(y1 - y0)
+        sx = 1 if x0 < x1 else -1
+        sy = 1 if y0 < y1 else -1
+        err = dx + dy
+        while True:
+            self.draw_pixel(x0, y0, color)
+            if x0 == x1 and y0 == y1:
+                break
+            e2 = err * 2
+            if e2 >= dy:
+                err += dy
+                x0 += sx
+            if e2 <= dx:
+                err += dx
+                y0 += sy
+
     def fill_screen(self, color):
         hi = (color >> 8) & 0xFF
         lo = color & 0xFF
