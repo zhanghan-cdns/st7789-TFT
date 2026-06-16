@@ -94,30 +94,16 @@ def get_wifi_info():
     global _wifi_cache
     try:
         r = subprocess.run(
-            ['nmcli', '-t', '-f', 'NAME,TYPE', 'connection', 'show', '--active'],
-            capture_output=True, text=True, timeout=3)
-        ssid = ''
+            ['nmcli', '-t', '-f', 'IN-USE,SSID,SIGNAL', 'dev', 'wifi', 'list'],
+            capture_output=True, text=True, timeout=5)
         for line in r.stdout.strip().split('\n'):
             parts = line.split(':')
-            if len(parts) >= 2 and parts[1] == 'wifi':
-                ssid = parts[0]
-                break
-        if ssid:
-            _wifi_cache = (ssid, -45, 75)
-            try:
-                r2 = subprocess.run(
-                    ['nmcli', '-t', '-f', 'IN-USE,SIGNAL', 'dev', 'wifi', 'list', '--rescan', 'no'],
-                    capture_output=True, text=True, timeout=2)
-                for line in r2.stdout.strip().split('\n'):
-                    parts = line.split(':')
-                    if len(parts) >= 2 and parts[0] == '*':
-                        signal = int(parts[1])
-                        dbm = -90 + int(signal * 60 / 100)
-                        _wifi_cache = (ssid, dbm, signal)
-                        break
-            except:
-                pass
-            return _wifi_cache
+            if len(parts) >= 3 and parts[0] == '*':
+                ssid = parts[1]
+                signal = int(parts[2])
+                dbm = -90 + int(signal * 60 / 100)
+                _wifi_cache = (ssid, dbm, signal)
+                return _wifi_cache
     except:
         pass
     if _wifi_cache is not None:
