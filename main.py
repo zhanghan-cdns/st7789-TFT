@@ -315,13 +315,14 @@ def main():
                                          daemon=True).start()
                         need_render = True
                 elif detail_focus == 'log':
+                    LOG_PAGE = 5
                     if key == 'up' and detail_scroll > 0:
-                        detail_scroll -= 1
+                        detail_scroll = max(0, detail_scroll - LOG_PAGE)
                         need_render = True
                     elif key == 'down':
                         max_scroll = max(0, len(detail_sampler.get().get('logs', [])) - 1) if detail_sampler and detail_sampler.get() else 0
                         if detail_scroll < max_scroll:
-                            detail_scroll += 1
+                            detail_scroll = min(detail_scroll + LOG_PAGE, max_scroll)
                             need_render = True
                     elif key in ('left', 'right'):
                         detail_focus = 'action'

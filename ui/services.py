@@ -160,7 +160,6 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
     y += 18
 
     # 日志区
-    log_y = y
     logs = detail.get('logs', [])
     max_scroll = max(0, len(logs) - 1)
     if log_scroll > max_scroll:
@@ -172,10 +171,6 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
             break
         disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
-
-    # 日志标签行高亮
-    if focus == 'log':
-        disp.fill_rect(8, log_y - 2, W - 16, 15, 0x2108)
 
     hint = ("←→按钮 ↓日志区 Enter执行" if focus == 'action'
             else "↑↓滚动 ←→按钮区 Esc返回")
