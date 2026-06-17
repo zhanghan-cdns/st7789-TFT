@@ -171,6 +171,7 @@ def main():
                 detail_msg = action_state['msg']
                 if view == 'service_detail':
                     need_render = True
+                    services_data = get_services()
 
             if need_render:
                 if view == 'menu':
