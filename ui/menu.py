@@ -28,7 +28,7 @@ COLS = 3
 MARGIN = 6
 GAP = 8
 TOP = 40
-HL = 0x1082  # 选中高亮底色（比卡片更深）
+HL = GREEN  # 选中高亮底色（绿色）
 
 
 def move_cursor(cursor, action, total=9):
