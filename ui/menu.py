@@ -5,7 +5,7 @@
 """
 from color import (
     BLACK, WHITE, CYAN, GREEN, MAGENTA, YELLOW, ORANGE, DGRAY, LGRAY,
-    CARD, CPU_CLR,
+    CARD, CPU_CLR, BLUE,
 )
 from .icons import get_icon
 
@@ -17,7 +17,7 @@ MENU_ITEMS = [
     {'label': '时间显示', 'color': CYAN, 'page': 'clock'},
     {'label': '系统服务', 'color': GREEN, 'page': 'services'},
     {'label': '音乐播放', 'color': MAGENTA, 'page': 'music'},
-    {'label': '预留', 'color': DGRAY, 'page': None},
+    {'label': '摄像头', 'color': BLUE, 'page': 'camera'},
     {'label': '预留', 'color': DGRAY, 'page': None},
     {'label': '预留', 'color': DGRAY, 'page': None},
     {'label': '预留', 'color': DGRAY, 'page': None},

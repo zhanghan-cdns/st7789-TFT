@@ -11,7 +11,7 @@ import threading
 from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
-    draw_menu, draw_music, draw_now_playing,
+    draw_menu, draw_music, draw_now_playing, draw_camera,
     move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
 )
 from ui.services import ROWS_PER_PAGE as SVC_ROWS, ACTIONS as SVC_ACTIONS
@@ -23,6 +23,7 @@ from service import (
     get_service_status, control_service,
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
+    capture_frame,
 )
 
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -77,6 +78,7 @@ def main():
     keys = KeyReader()
     player = MusicPlayer()
     music_sampler = None  # 进入音乐页时再懒加载歌单
+    camera_sampler = None # 摄像头帧采样器（进入摄像头页时启动）
     print("九宫格菜单：↑↓←→选择，Enter 进入，Esc 返回，q 退出")
 
     # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
@@ -200,7 +202,14 @@ def main():
                                 else {})
                     draw_now_playing(disp, cur_song, player.status(),
                                      player.elapsed(), player.duration())
+                elif view == 'camera':
+                    frame = camera_sampler.get() if camera_sampler else None
+                    draw_camera(disp, frame)
                 need_render = False
+
+            # 摄像头页需要高频刷新（~5fps，随主循环每次重绘）
+            if view == 'camera':
+                need_render = True
 
             # 细粒度轮询按键，使切换即时响应
             key = keys.poll(0.05)
@@ -222,6 +231,10 @@ def main():
                             music_sampler = BackgroundSampler(
                                 get_hot_playlist, 600.0, initial=None)
                             music_sampler.start()
+                        elif target == 'camera' and camera_sampler is None:
+                            camera_sampler = BackgroundSampler(
+                                capture_frame, 0.2, initial=None)
+                            camera_sampler.start()
                 elif key == 'quit':
                     break
                 continue
@@ -237,6 +250,11 @@ def main():
                     if detail_sampler is not None:
                         detail_sampler.stop()
                         detail_sampler = None
+                elif view == 'camera':
+                    view = 'menu'
+                    if camera_sampler is not None:
+                        camera_sampler.stop()
+                        camera_sampler = None
                 else:
                     view = 'menu'
                 need_render = True
@@ -348,6 +366,8 @@ def main():
             detail_sampler.stop()
         if music_sampler is not None:
             music_sampler.stop()
+        if camera_sampler is not None:
+            camera_sampler.stop()
         player.stop()
         keys.restore()
         disp.close()

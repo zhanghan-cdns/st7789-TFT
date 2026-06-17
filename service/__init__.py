@@ -15,6 +15,7 @@ from .systemd import (
 from .music import (
     MusicPlayer, get_hot_playlist, search_songs, get_song_url,
 )
+from .camera import capture_frame
 
 __all__ = [
     'KeyReader', 'BackgroundSampler',
@@ -22,4 +23,5 @@ __all__ = [
     'get_wifi_info', 'get_ip_address', 'detect_net_iface', 'read_net_bytes',
     'get_services', 'get_service_status', 'get_service_logs', 'control_service',
     'MusicPlayer', 'get_hot_playlist', 'search_songs', 'get_song_url',
+    'capture_frame',
 ]
