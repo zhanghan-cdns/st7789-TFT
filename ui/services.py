@@ -54,9 +54,15 @@ def draw_services(disp, services, cursor=0, scroll=0):
     info = f"共 {total} 个 第 {cur_page}/{max_page} 页  光标 {cursor+1}/{total}"
     disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 15, info, WHITE, size=10)
 
+    # 列头
+    disp.draw_text_pil(28, 36, "服务名称", DGRAY, size=10)
+    en_header = "自启"
+    en_w = disp.text_width_pil(en_header, 10)
+    disp.draw_text_pil(W - 14 - en_w, 36, en_header, DGRAY, size=10)
+
     start = scroll
     end = min(start + ROWS_PER_PAGE, total)
-    y = 40
+    y = 52
     for i in range(start, end):
         name, active, sub, enabled = services[i]
 
