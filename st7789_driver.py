@@ -206,6 +206,45 @@ class ST7789:
             off = py * stride + x0 * 2
             self.fbuf[off:off + (x1 - x0) * 2] = pixel * (x1 - x0)
 
+    def blit_mask(self, x, y, mask, color):
+        """将 alpha 蒙版(PIL 'L', 0~255)按 color 着色并 alpha 混合到帧缓冲。
+
+        用于绘制图标：mask 非零处用 color 与底色按 alpha 混合，实现抗锯齿。
+        """
+        fr = ((color >> 11) & 0x1F) << 3
+        fg = ((color >> 5) & 0x3F) << 2
+        fb = (color & 0x1F) << 3
+        px = mask.load()
+        mw, mh = mask.size
+        stride = self.width * 2
+        for py in range(mh):
+            iy = y + py
+            if iy < 0 or iy >= self.height:
+                continue
+            for pxx in range(mw):
+                a = px[pxx, py]
+                if a == 0:
+                    continue
+                ix = x + pxx
+                if ix < 0 or ix >= self.width:
+                    continue
+                off = iy * stride + ix * 2
+                if a >= 255:
+                    self.fbuf[off] = (color >> 8) & 0xFF
+                    self.fbuf[off + 1] = color & 0xFF
+                    continue
+                bg = (self.fbuf[off] << 8) | self.fbuf[off + 1]
+                br = ((bg >> 11) & 0x1F) << 3
+                bgc = ((bg >> 5) & 0x3F) << 2
+                bb = (bg & 0x1F) << 3
+                inv = 255 - a
+                r = (fr * a + br * inv) // 255
+                g = (fg * a + bgc * inv) // 255
+                b = (fb * a + bb * inv) // 255
+                c = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+                self.fbuf[off] = (c >> 8) & 0xFF
+                self.fbuf[off + 1] = c & 0xFF
+
     def draw_line(self, x0, y0, x1, y1, color):
         """Bresenham 画线"""
         dx = abs(x1 - x0)

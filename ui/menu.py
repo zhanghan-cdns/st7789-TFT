@@ -7,6 +7,9 @@ from color import (
     BLACK, WHITE, CYAN, GREEN, MAGENTA, YELLOW, ORANGE, DGRAY, LGRAY,
     CARD, CPU_CLR,
 )
+from .icons import get_icon
+
+ICON_SIZE = 30  # 菜单图标边长（像素）
 
 # 菜单项：page 为对应子页标识，None 表示预留位（不可进入）
 MENU_ITEMS = [
@@ -70,9 +73,13 @@ def draw_menu(disp, items, cursor):
         bg = HL if i == cursor else CARD
         disp.fill_round_rect(x, y, cell_w, cell_h, 8, bg)
 
-        # 图标圆点（预留位用暗灰）
-        dot = item['color'] if not reserved else DGRAY
-        disp.fill_circle(x + cell_w // 2, y + 18, 10, dot)
+        # 图标（预留位用暗灰）：SVG 蒙版着色绘制，渲染失败回退为圆点
+        icon_clr = item['color'] if not reserved else DGRAY
+        icon = None if reserved else get_icon(item['page'], ICON_SIZE)
+        if icon is not None:
+            disp.blit_mask(x + (cell_w - ICON_SIZE) // 2, y + 6, icon, icon_clr)
+        else:
+            disp.fill_circle(x + cell_w // 2, y + 18, 10, icon_clr)
 
         # 标签居中
         label = item['label']
@@ -80,7 +87,7 @@ def draw_menu(disp, items, cursor):
         text_clr = WHITE if not reserved else DGRAY
         if i == cursor and not reserved:
             text_clr = item['color']
-        disp.draw_text_pil(x + (cell_w - lw) // 2, y + cell_h - 22, label,
+        disp.draw_text_pil(x + (cell_w - lw) // 2, y + cell_h - 20, label,
                            text_clr, size=14)
 
     # 底部操作提示
