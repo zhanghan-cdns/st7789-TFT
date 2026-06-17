@@ -1,12 +1,12 @@
 """摄像头画面显示"""
-from color import BLACK, WHITE, DGRAY, LGRAY
+from color import BLACK, WHITE, DGRAY
 
 
 def draw_camera(disp, frame, name=''):
-    """将 raw RGB565 帧数据直接写入显示帧缓冲并刷新。
+    """将已处理好字节序的 raw RGB565 帧数据写入显示帧缓冲并刷新。
 
     参数：
-      frame — ffmpeg 输出的 raw RGB565 bytes，宽×高×2
+      frame — bytes，宽×高×2，高字节在前（大端序）
       name  — 顶部显示的摄像头名称（可选）
     """
     W = disp.width
@@ -23,11 +23,7 @@ def draw_camera(disp, frame, name=''):
         disp.flush()
         return
 
-    # ffmpeg -pix_fmt rgb565 输出小端字节序，ST7789 帧缓冲需要高字节在前
-    # 交换每对字节：byte0↔byte1, byte2↔byte3, ...
-    buf = bytearray(frame[:expected])
-    buf[0::2], buf[1::2] = buf[1::2], buf[0::2]
-    disp.fbuf[:expected] = buf
+    disp.fbuf[:expected] = frame[:expected]
 
     if name:
         disp.fill_round_rect(6, 6, W - 12, 22, 6, 0x2104)

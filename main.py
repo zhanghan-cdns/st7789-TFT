@@ -23,7 +23,7 @@ from service import (
     get_service_status, control_service,
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
-    capture_frame,
+    CameraStream,
 )
 
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -232,8 +232,7 @@ def main():
                                 get_hot_playlist, 600.0, initial=None)
                             music_sampler.start()
                         elif target == 'camera' and camera_sampler is None:
-                            camera_sampler = BackgroundSampler(
-                                capture_frame, 0.2, initial=None)
+                            camera_sampler = CameraStream()
                             camera_sampler.start()
                 elif key == 'quit':
                     break
