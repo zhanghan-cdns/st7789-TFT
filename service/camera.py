@@ -1,104 +1,61 @@
-"""摄像头帧采集：V4L2 read 接口，直接读 /dev/video0。
-
-零外部依赖（仅标准库），无需 ffmpeg / OpenCV / v4l2 包。
-"""
-import os
-import struct
-import fcntl
+"""摄像头帧采集：常驻 ffmpeg 进程持续输出 raw RGB565，后台线程读帧。"""
+import subprocess
 import threading
 
 
-# ── V4L2 ioctl 常量（通过 _IOWR 宏计算，aarch64 已验证）────────────
-V4L2_BUF_TYPE_VIDEO_CAPTURE = 1
-V4L2_PIX_FMT_YUYV = 0x56595559  # 'YUYV'
-
-def _IOWR(type_, nr, size):
-    return (3 << 30) | (ord(type_) << 8) | nr | (size << 16)
-
-# struct v4l2_format 在 aarch64 上 = 200 字节
-# struct v4l2_pix_format 占 48 字节，嵌入 type(4)+pad(4) 之后
-VIDIOC_S_FMT = _IOWR('V', 5, 200)
-
-def _vidioc_s_fmt(fd, w, h, pixfmt):
-    """通过 S_FMT 设置摄像头采集格式。"""
-    # v4l2_format {
-    #   __u32 type;                    // 0-3
-    #   struct v4l2_pix_format {       // 4-51
-    #     __u32 width;                 // 4-7
-    #     __u32 height;                // 8-11
-    #     __u32 pixelformat;           // 12-15
-    #     __u32 field;                 // 16-19
-    #     __u32 bytesperline;          // 20-23
-    #     __u32 sizeimage;             // 24-27
-    #     __u32 colorspace;            // 28-31
-    #     __u32 priv;                  // 32-35
-    #     __u32 flags;                 // 36-39
-    #     __u32 ycbcr_enc;             // 40-43
-    #     __u32 quantization;          // 44-47
-    #     __u32 xfer_func;             // 48-51
-    #   }
-    #   __u8 raw_data[148];           // 52-199 (填充到 200 字节)
-    # }
-    fmt = struct.pack('I', V4L2_BUF_TYPE_VIDEO_CAPTURE)
-    fmt += struct.pack('IIIIIIIIIIII', w, h, pixfmt,
-                       0, 0, w * h * 2, 0, 0, 0, 0, 0, 0)
-    fmt += b'\x00' * (200 - len(fmt))
-    fcntl.ioctl(fd, VIDIOC_S_FMT, fmt)
-
-
-# ── YUYV → RGB565 ─────────────────────────────────────────────────
-def _yuyv_to_rgb565(y0, u, y1, v):
-    y0 -= 16; y1 -= 16; u -= 128; v -= 128
-    r0 = max(0, min(31, (298 * y0 + 409 * v + 128) >> 8))
-    g0 = max(0, min(63, (298 * y0 - 100 * u - 208 * v + 128) >> 8))
-    b0 = max(0, min(31, (298 * y0 + 516 * u + 128) >> 8))
-    r1 = max(0, min(31, (298 * y1 + 409 * v + 128) >> 8))
-    g1 = max(0, min(63, (298 * y1 - 100 * u - 208 * v + 128) >> 8))
-    b1 = max(0, min(31, (298 * y1 + 516 * u + 128) >> 8))
-    return (r0 << 11) | (g0 << 5) | b0, (r1 << 11) | (g1 << 5) | b1
-
-
-def _yuyv_to_rgb565_frame(data, w, h):
-    out = bytearray(w * h * 2)
-    n = w * h // 2
-    for i in range(n):
-        off = i * 4
-        y0, u, y1, v = data[off:off+4]
-        p0, p1 = _yuyv_to_rgb565(y0, u, y1, v)
-        out[i*4:i*4+4] = struct.pack('>HH', p0, p1)
-    return bytes(out)
-
-
-# ── 摄像头帧流（后台线程） ─────────────────────────────────────────
 class CameraStream:
-    """通过 V4L2 read 接口后台线程持续采集摄像头帧。
+    """保持 ffmpeg 子进程持续输出，后台线程循环读取最新一帧。
 
-    >>> cam = CameraStream()
-    >>> cam.start()
-    >>> frame = cam.get()   # RGB565 bytes（大端序）或 None
-    >>> cam.stop()
+    用法：
+      cam = CameraStream('/dev/video0')
+      cam.start()
+      frame = cam.get()       # 返回 bytes 或 None
+      cam.stop()
     """
 
     def __init__(self, device='/dev/video0', width=320, height=240):
         self.device = device
         self.w = width
         self.h = height
+        self.frame_size = width * height * 2
         self._frame = None
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread = None
-        self._fd = None
+        self._proc = None
 
     def start(self):
-        self._fd = os.open(self.device, os.O_RDWR)
-        try:
-            _vidioc_s_fmt(self._fd, self.w, self.h, V4L2_PIX_FMT_YUYV)
-        except Exception:
-            os.close(self._fd)
-            self._fd = None
-            raise
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def _run(self):
+        cmd = [
+            'ffmpeg', '-f', 'v4l2',
+            '-video_size', f'{self.w}x{self.h}',
+            '-i', self.device,
+            '-f', 'rawvideo',
+            '-pix_fmt', 'rgb565',
+            '-loglevel', 'error',
+            '-',
+        ]
+        try:
+            self._proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                bufsize=self.frame_size * 2)
+        except Exception:
+            return
+
+        while not self._stop.is_set():
+            try:
+                buf = self._proc.stdout.read(self.frame_size)
+                if not buf or len(buf) < self.frame_size:
+                    break
+                buf = bytearray(buf)
+                buf[0::2], buf[1::2] = buf[1::2], buf[0::2]
+                with self._lock:
+                    self._frame = bytes(buf)
+            except Exception:
+                break
 
     def get(self):
         with self._lock:
@@ -106,19 +63,10 @@ class CameraStream:
 
     def stop(self):
         self._stop.set()
-        if self._fd is not None:
-            os.close(self._fd)
-            self._fd = None
-
-    def _run(self):
-        frame_size = self.w * self.h * 2
-        while not self._stop.is_set():
+        if self._proc:
             try:
-                raw = os.read(self._fd, frame_size)
-                if len(raw) != frame_size:
-                    continue
-                rgb = _yuyv_to_rgb565_frame(raw, self.w, self.h)
-                with self._lock:
-                    self._frame = rgb
-            except OSError:
-                break
+                self._proc.terminate()
+                self._proc.wait(timeout=2)
+            except Exception:
+                self._proc.kill()
+            self._proc = None
