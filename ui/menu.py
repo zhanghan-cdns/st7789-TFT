@@ -28,7 +28,7 @@ COLS = 3
 MARGIN = 6
 GAP = 8
 TOP = 40
-HL = 0x3186  # 选中高亮底色
+HL = 0x1082  # 选中高亮底色（比卡片更深）
 
 
 def move_cursor(cursor, action, total=9):
@@ -59,7 +59,7 @@ def draw_menu(disp, items, cursor):
 
     # 顶栏标题
     disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "菜单", CYAN, size=16)
+    disp.draw_text_pil(16, 11, "MENU", CYAN, size=16)
 
     cell_w = (W - 2 * MARGIN - (COLS - 1) * GAP) // COLS
     cell_h = (H - 16 - TOP - 2 * GAP) // 3
@@ -74,24 +74,17 @@ def draw_menu(disp, items, cursor):
         disp.fill_round_rect(x, y, cell_w, cell_h, 8, bg)
 
         # 图标（预留位用暗灰）：SVG 蒙版着色绘制，渲染失败回退为圆点
+        # 已移除文字标签，图标在格子内垂直居中
         icon_clr = item['color'] if not reserved else DGRAY
         icon = None if reserved else get_icon(item['page'], ICON_SIZE)
         if icon is not None:
-            disp.blit_mask(x + (cell_w - ICON_SIZE) // 2, y + 6, icon, icon_clr)
+            disp.blit_mask(x + (cell_w - ICON_SIZE) // 2,
+                           y + (cell_h - ICON_SIZE) // 2, icon, icon_clr)
         else:
-            disp.fill_circle(x + cell_w // 2, y + 18, 10, icon_clr)
-
-        # 标签居中
-        label = item['label']
-        lw, _ = disp.text_size_pil(label, 14)
-        text_clr = WHITE if not reserved else DGRAY
-        if i == cursor and not reserved:
-            text_clr = item['color']
-        disp.draw_text_pil(x + (cell_w - lw) // 2, y + cell_h - 20, label,
-                           text_clr, size=14)
+            disp.fill_circle(x + cell_w // 2, y + cell_h // 2, 10, icon_clr)
 
     # 底部操作提示
-    hint = "↑↓←→选择  Enter进入  q退出"
+    hint = "Move: arrows   Enter: open   q: quit"
     hw, _ = disp.text_size_pil(hint, 10)
     disp.draw_text_pil((W - hw) // 2, H - 13, hint, DGRAY, size=10)
 
