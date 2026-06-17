@@ -23,7 +23,7 @@ def draw_camera(disp, frame, name=''):
         disp.flush()
         return
 
-    disp.buf[:expected] = frame[:expected]
+    disp.fbuf[:expected] = frame[:expected]
 
     if name:
         disp.fill_round_rect(6, 6, W - 12, 22, 6, 0x2104)
