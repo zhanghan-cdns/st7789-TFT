@@ -23,24 +23,24 @@ def _vidioc_s_fmt(fd, w, h, pixfmt):
     """通过 S_FMT 设置摄像头采集格式。"""
     # v4l2_format {
     #   __u32 type;                    // 0-3
-    #   struct v4l2_pix_format {       // 8-55 (offset 8, 4 字节 pad)
-    #     __u32 width;                 // 8-11
-    #     __u32 height;                // 12-15
-    #     __u32 pixelformat;           // 16-19
-    #     __u32 field;                 // 20-23
-    #     __u32 bytesperline;          // 24-27
-    #     __u32 sizeimage;             // 28-31
-    #     __u32 colorspace;            // 32-35
-    #     __u32 priv;                  // 36-39
-    #     __u32 flags;                 // 40-43
-    #     __u32 ycbcr_enc;             // 44-47
-    #     __u32 quantization;          // 48-51
-    #     __u32 xfer_func;             // 52-55
+    #   struct v4l2_pix_format {       // 4-51
+    #     __u32 width;                 // 4-7
+    #     __u32 height;                // 8-11
+    #     __u32 pixelformat;           // 12-15
+    #     __u32 field;                 // 16-19
+    #     __u32 bytesperline;          // 20-23
+    #     __u32 sizeimage;             // 24-27
+    #     __u32 colorspace;            // 28-31
+    #     __u32 priv;                  // 32-35
+    #     __u32 flags;                 // 36-39
+    #     __u32 ycbcr_enc;             // 40-43
+    #     __u32 quantization;          // 44-47
+    #     __u32 xfer_func;             // 48-51
     #   }
-    #   __u8 raw_data[144];           // 56-199 (填充)
+    #   __u8 raw_data[148];           // 52-199 (填充到 200 字节)
     # }
-    fmt = struct.pack('I4x', V4L2_BUF_TYPE_VIDEO_CAPTURE)
-    fmt += struct.pack('IIIIIIIIIII', w, h, pixfmt,
+    fmt = struct.pack('I', V4L2_BUF_TYPE_VIDEO_CAPTURE)
+    fmt += struct.pack('IIIIIIIIIIII', w, h, pixfmt,
                        0, 0, w * h * 2, 0, 0, 0, 0, 0, 0)
     fmt += b'\x00' * (200 - len(fmt))
     fcntl.ioctl(fd, VIDIOC_S_FMT, fmt)
