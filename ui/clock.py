@@ -21,16 +21,21 @@ def _draw_card_bg(disp, x, y, w, h):
 def _flip_card(disp, x, y, w, h, text, size, fg):
     tw, th = disp.text_size_pil(text, size)
     _draw_card_bg(disp, x, y, w, h)
-    disp.draw_text_pil(x + (w - tw) // 2, y + (h - th) // 2, text, fg, size=size)
+    disp.draw_text_pil(x + (w - tw) // 2, y + (h - th) // 2, text, fg,
+                       size=size, clip=(x, y, x + w, y + h))
 
 
 def _animate_slide(disp, x, y, w, h, text, size, fg, frames=5):
-    """新数字从下方滑入卡片（阻塞 ~200ms）"""
+    """新数字从卡片底缘滑入并定位到居中（裁剪在卡片内，阻塞 ~200ms）"""
     tw, th = disp.text_size_pil(text, size)
+    end_top = (h - th) // 2          # 终点：与静态帧一致的居中位置
+    start_top = h                    # 起点：卡片底缘下方（被裁剪不可见）
+    clip = (x, y, x + w, y + h)
     for i in range(1, frames + 1):
-        dy = int(h * (1 - i / frames))
+        top = int(start_top + (end_top - start_top) * (i / frames))
         _draw_card_bg(disp, x, y, w, h)
-        disp.draw_text_pil(x + (w - tw) // 2, y + dy, text, fg, size=size)
+        disp.draw_text_pil(x + (w - tw) // 2, y + top, text, fg,
+                           size=size, clip=clip)
         disp.flush()
         _time.sleep(0.04)
 

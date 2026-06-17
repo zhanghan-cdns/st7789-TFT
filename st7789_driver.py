@@ -325,7 +325,8 @@ class ST7789:
         w, _ = self.text_size_pil(text, size, font_path)
         return w
 
-    def draw_text_pil(self, x, y, text, color, size=16, font_path=None):
+    def draw_text_pil(self, x, y, text, color, size=16, font_path=None, clip=None):
+        """绘制文字；clip=(x0,y0,x1,y1) 时仅在该矩形内绘制（用于滑动动画裁剪）"""
         try:
             from PIL import Image, ImageDraw
         except ImportError:
@@ -337,6 +338,10 @@ class ST7789:
         draw = ImageDraw.Draw(img)
         draw.text((-bbox[0], -bbox[1]), text, font=font, fill=1)
 
+        # 裁剪边界（默认整屏）
+        cx0, cy0, cx1, cy1 = (clip if clip is not None
+                              else (0, 0, self.width, self.height))
+
         hi = (color >> 8) & 0xFF
         lo = color & 0xFF
         pixel = bytearray([hi, lo])
@@ -344,11 +349,11 @@ class ST7789:
 
         for py in range(th):
             iy = y + py
-            if iy < 0 or iy >= self.height:
+            if iy < 0 or iy >= self.height or iy < cy0 or iy >= cy1:
                 continue
             for px in range(tw):
                 ix = x + px
-                if ix < 0 or ix >= self.width:
+                if ix < 0 or ix >= self.width or ix < cx0 or ix >= cx1:
                     continue
                 if img.getpixel((px, py)):
                     off = iy * stride + ix * 2
