@@ -16,6 +16,7 @@ _ICON_FILES = {
     'clock': 'time.svg',
     'services': 'systemd.svg',
     'music': 'music.svg',
+    'camera': 'camera.svg',
 }
 
 _cache = {}
