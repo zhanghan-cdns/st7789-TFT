@@ -23,7 +23,11 @@ def draw_camera(disp, frame, name=''):
         disp.flush()
         return
 
-    disp.fbuf[:expected] = frame[:expected]
+    # ffmpeg -pix_fmt rgb565 输出小端字节序，ST7789 帧缓冲需要高字节在前
+    # 交换每对字节：byte0↔byte1, byte2↔byte3, ...
+    buf = bytearray(frame[:expected])
+    buf[0::2], buf[1::2] = buf[1::2], buf[0::2]
+    disp.fbuf[:expected] = buf
 
     if name:
         disp.fill_round_rect(6, 6, W - 12, 22, 6, 0x2104)
