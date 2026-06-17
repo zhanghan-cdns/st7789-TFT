@@ -55,11 +55,12 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str):
     _flip_card(disp, x + cw + igap, card_y, cw, ch, hh[1], 64, WHITE)
     x += group_w
 
-    # 冒号（两个 CYAN 圆点，垂直居中）
-    cx = x + colon_w // 2
-    cy = card_y + ch // 2
-    disp.fill_circle(cx, cy - 18, 5, CYAN)
-    disp.fill_circle(cx, cy + 18, 5, CYAN)
+    # 冒号（两个 CYAN 圆点，垂直居中；秒为偶数时显示，奇数时熄灭实现闪烁）
+    if int(ss) % 2 == 0:
+        cx = x + colon_w // 2
+        cy = card_y + ch // 2
+        disp.fill_circle(cx, cy - 18, 5, CYAN)
+        disp.fill_circle(cx, cy + 18, 5, CYAN)
     x += colon_w
 
     # 分（两位大牌）
