@@ -10,7 +10,7 @@
 from .dashboard import draw_dashboard, CPU_HISTORY_LEN
 from .clock import draw_clock
 from .lunar import lunar_date_str
-from .services import draw_services
+from .services import draw_services, draw_service_detail
 from .menu import draw_menu, move_cursor, MENU_ITEMS
 from .music import draw_music, draw_now_playing
 
@@ -18,6 +18,7 @@ __all__ = [
     'draw_dashboard',
     'draw_clock',
     'draw_services',
+    'draw_service_detail',
     'draw_menu',
     'draw_music',
     'draw_now_playing',

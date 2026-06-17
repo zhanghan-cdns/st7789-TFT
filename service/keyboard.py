@@ -37,6 +37,8 @@ _KEYMAP = {
     _KEY_Q: 'quit',
     _KEY_ESC: 'back',
 }
+# 支持长按连续触发的方向键（接受内核自动重复事件 value==2）
+_REPEAT_KEYS = {_KEY_UP, _KEY_DOWN, _KEY_LEFT, _KEY_RIGHT}
 
 
 class KeyReader:
@@ -155,9 +157,12 @@ class KeyReader:
                 _, _, etype, code, value = struct.unpack(
                     _EV_FMT, data[off:off + _EV_SIZE])
                 if etype == _EV_KEY:
-                    if self.debug:
+                    if self.debug and value in (1, 2):
                         print(f"[按键] EV_KEY code={code} value={value}")
-                    if value == 1 and code in _KEYMAP:  # 仅按下沿
+                    # 按下沿(1)对所有键有效；自动重复(2)仅对方向键有效，
+                    # 实现长按上下键连续滚动。
+                    if code in _KEYMAP and (
+                            value == 1 or (value == 2 and code in _REPEAT_KEYS)):
                         return _KEYMAP[code]
         return None
 

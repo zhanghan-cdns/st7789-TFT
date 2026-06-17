@@ -8,6 +8,9 @@ from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, 
 ROWS_PER_PAGE = 7
 ROW_HEIGHT = 24
 
+# 详情页操作按钮：(systemctl 动作, 显示文字)
+ACTIONS = [('start', '启动'), ('stop', '停止'), ('restart', '重启')]
+
 
 def _active_color(sub):
     if sub == 'running':
@@ -79,5 +82,82 @@ def draw_services(disp, services, cursor=0, scroll=0):
 
         y += ROW_HEIGHT
 
-    disp.draw_text_pil(6, H - 12, "↑↓选择  ←→翻页", DGRAY, size=10)
+    disp.draw_text_pil(6, H - 12, "↑↓选择 ←→翻页 Enter详情", DGRAY, size=10)
+    disp.flush()
+
+
+def draw_service_detail(disp, detail, action_cursor=0, msg=''):
+    """绘制系统服务详情页：状态信息 + 操作按钮 + 最近日志
+
+    参数：
+      detail        — get_service_status 返回的字典，None 表示加载中
+      action_cursor — 当前选中的操作按钮索引（见 ACTIONS）
+      msg           — 操作结果/状态提示文本
+    """
+    W = disp.width
+    H = disp.height
+    disp.fill_screen(BLACK)
+
+    name = (detail.get('name', '') if detail else '')
+    short = name[:-8] if name.endswith('.service') else name
+    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
+    disp.draw_text_pil(16, 11, short[:26], CYAN, size=16)
+
+    if not detail:
+        disp.draw_text_pil(16, 70, "加载中...", LGRAY, size=14)
+        disp.flush()
+        return
+
+    # 状态信息
+    y = 40
+    active = detail.get('active', '')
+    sub = detail.get('sub', '')
+    act_clr = (GREEN if active == 'active'
+               else RED if active == 'failed' else LGRAY)
+    disp.draw_text_pil(12, y, "状态:", LGRAY, size=12)
+    disp.draw_text_pil(56, y, f"{_active_label(sub)} ({active})", act_clr, size=12)
+    y += 18
+
+    en = detail.get('enabled', '')
+    disp.draw_text_pil(12, y, "自启:", LGRAY, size=12)
+    disp.draw_text_pil(56, y, _enabled_label(en), _enabled_color(en), size=12)
+    extra = []
+    if detail.get('pid'):
+        extra.append(f"PID {detail['pid']}")
+    if detail.get('memory'):
+        extra.append(detail['memory'])
+    if extra:
+        disp.draw_text_pil(150, y, '  '.join(extra), WHITE, size=12)
+    y += 18
+
+    desc = detail.get('description', '')
+    if desc:
+        disp.draw_text_pil(12, y, desc[:40], DGRAY, size=11)
+    y += 18
+
+    # 操作按钮（←→ 选择，Enter 执行）
+    bw, bh, gap = 92, 26, 8
+    for i, (_, label) in enumerate(ACTIONS):
+        x = 12 + i * (bw + gap)
+        sel = (i == action_cursor)
+        disp.fill_round_rect(x, y, bw, bh, 6, GREEN if sel else CARD)
+        tw = disp.text_width_pil(label, 13)
+        disp.draw_text_pil(x + (bw - tw) // 2, y + 6, label,
+                           BLACK if sel else WHITE, size=13)
+    y += bh + 6
+
+    if msg:
+        disp.draw_text_pil(12, y, msg[:40], YELLOW, size=12)
+    y += 18
+
+    # 最近日志
+    disp.draw_text_pil(12, y, "日志:", LGRAY, size=11)
+    y += 15
+    for ln in detail.get('logs', []):
+        if y > H - 24:
+            break
+        disp.draw_text_pil(12, y, ln[:60], LGRAY, size=10)
+        y += 13
+
+    disp.draw_text_pil(6, H - 12, "←→选择 Enter执行 Esc返回", DGRAY, size=10)
     disp.flush()

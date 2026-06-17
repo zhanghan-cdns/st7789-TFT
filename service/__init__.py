@@ -9,7 +9,9 @@ from .sysinfo import get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory
 from .network import (
     get_wifi_info, get_ip_address, detect_net_iface, read_net_bytes,
 )
-from .systemd import get_services
+from .systemd import (
+    get_services, get_service_status, get_service_logs, control_service,
+)
 from .music import (
     MusicPlayer, get_hot_playlist, search_songs, get_song_url,
 )
@@ -18,6 +20,6 @@ __all__ = [
     'KeyReader', 'BackgroundSampler',
     'get_cpu_usage', 'get_cpu_temp', 'get_fan_rpm', 'get_memory',
     'get_wifi_info', 'get_ip_address', 'detect_net_iface', 'read_net_bytes',
-    'get_services',
+    'get_services', 'get_service_status', 'get_service_logs', 'control_service',
     'MusicPlayer', 'get_hot_playlist', 'search_songs', 'get_song_url',
 ]

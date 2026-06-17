@@ -6,18 +6,21 @@
 import time
 import sys
 import glob
+import threading
 
 from st7789_driver import ST7789
 from ui import (
-    draw_dashboard, draw_clock, draw_services, draw_menu, draw_music,
-    draw_now_playing, move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
+    draw_dashboard, draw_clock, draw_services, draw_service_detail,
+    draw_menu, draw_music, draw_now_playing,
+    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
 )
-from ui.services import ROWS_PER_PAGE as SVC_ROWS
+from ui.services import ROWS_PER_PAGE as SVC_ROWS, ACTIONS as SVC_ACTIONS
 from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
 from service import (
     KeyReader, BackgroundSampler,
     get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory,
     get_wifi_info, get_ip_address, get_services,
+    get_service_status, control_service,
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
 )
@@ -59,6 +62,11 @@ def main():
     menu_cursor = 0
     services_cursor = 0
     services_scroll = 0
+    detail_name = ''            # 当前详情页对应的服务名
+    detail_action = 0           # 详情页操作按钮光标（见 SVC_ACTIONS）
+    detail_msg = ''             # 详情页操作结果提示
+    detail_sampler = None       # 详情页状态/日志后台采样器
+    action_state = {'pending': False, 'done': False, 'msg': ''}  # 控制操作线程结果
     music_cursor = 0
     music_scroll = 0
     music_playing_index = -1
@@ -99,6 +107,14 @@ def main():
             print(f"[音乐] 播放: {song['name']} - {song['artist']}")
             return True
         return False
+
+    def run_action(name, act):
+        """后台线程执行 systemctl 操作，结果写回 action_state，避免阻塞主循环"""
+        ok, m = control_service(name, act)
+        action_state['msg'] = m
+        action_state['pending'] = False
+        action_state['done'] = True
+        print(f"[服务] {name} {act}: {'成功' if ok else '失败'} {m}")
 
     try:
         while True:
@@ -145,6 +161,13 @@ def main():
                 else:
                     music_playing_index = -1
 
+            # 服务控制操作完成：取回提示文本并刷新详情页
+            if action_state['done']:
+                action_state['done'] = False
+                detail_msg = action_state['msg']
+                if view == 'service_detail':
+                    need_render = True
+
             if need_render:
                 if view == 'menu':
                     draw_menu(disp, MENU_ITEMS, menu_cursor)
@@ -162,6 +185,9 @@ def main():
                                lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
                 elif view == 'services':
                     draw_services(disp, services_data, services_cursor, services_scroll)
+                elif view == 'service_detail':
+                    detail = detail_sampler.get() if detail_sampler else None
+                    draw_service_detail(disp, detail, detail_action, detail_msg)
                 elif view == 'music':
                     draw_music(disp, music_songs, music_cursor, music_scroll,
                                music_playing_index, player.status(), music_loading)
@@ -197,9 +223,17 @@ def main():
                     break
                 continue
 
-            # ---------- 子页通用：Esc 返回（播放页回列表，其余回菜单），q 退出 ----------
+            # ---------- 子页通用：Esc 返回（详情→列表，播放→列表，其余→菜单），q 退出 ----------
             if key == 'back':
-                view = 'music' if view == 'playing' else 'menu'
+                if view == 'playing':
+                    view = 'music'
+                elif view == 'service_detail':
+                    view = 'services'
+                    if detail_sampler is not None:
+                        detail_sampler.stop()
+                        detail_sampler = None
+                else:
+                    view = 'menu'
                 need_render = True
                 continue
             if key == 'quit':
@@ -217,6 +251,38 @@ def main():
                     services_cursor += 1
                     if services_cursor >= services_scroll + SVC_ROWS:
                         services_scroll = services_cursor - SVC_ROWS + 1
+                    need_render = True
+                elif key == 'enter' and services_data:
+                    # 进入服务详情页，启动后台采样（状态+日志，每 2 秒刷新）
+                    detail_name = services_data[services_cursor][0]
+                    detail_action = 0
+                    detail_msg = ''
+                    if detail_sampler is not None:
+                        detail_sampler.stop()
+                    detail_sampler = BackgroundSampler(
+                        lambda n=detail_name: get_service_status(n), 2.0,
+                        initial=None)
+                    detail_sampler.start()
+                    view = 'service_detail'
+                    need_render = True
+                    print(f"[服务] 查看详情 {detail_name}")
+
+            # ---------- 系统服务详情页 ----------
+            elif view == 'service_detail':
+                if key in ('left', 'up'):
+                    detail_action = (detail_action - 1) % len(SVC_ACTIONS)
+                    need_render = True
+                elif key in ('right', 'down'):
+                    detail_action = (detail_action + 1) % len(SVC_ACTIONS)
+                    need_render = True
+                elif key == 'enter' and not action_state['pending']:
+                    action_state['pending'] = True
+                    action_state['done'] = False
+                    detail_msg = '执行中...'
+                    act = SVC_ACTIONS[detail_action][0]
+                    threading.Thread(target=run_action,
+                                     args=(detail_name, act),
+                                     daemon=True).start()
                     need_render = True
 
             # ---------- 音乐列表页 ----------
@@ -254,6 +320,8 @@ def main():
     finally:
         wifi_sampler.stop()
         services_sampler.stop()
+        if detail_sampler is not None:
+            detail_sampler.stop()
         if music_sampler is not None:
             music_sampler.stop()
         player.stop()
