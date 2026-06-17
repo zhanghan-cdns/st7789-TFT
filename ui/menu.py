@@ -74,8 +74,13 @@ def draw_menu(disp, items, cursor):
         disp.fill_round_rect(x, y, cell_w, cell_h, 8, bg)
 
         # 图标（预留位用暗灰）：SVG 蒙版着色绘制，渲染失败回退为圆点
-        # 已移除文字标签，图标在格子内垂直居中
-        icon_clr = item['color'] if not reserved else DGRAY
+        # 已移除文字标签，图标在格子内垂直居中；选中项图标用白色
+        if reserved:
+            icon_clr = DGRAY
+        elif i == cursor:
+            icon_clr = WHITE
+        else:
+            icon_clr = item['color']
         icon = None if reserved else get_icon(item['page'], ICON_SIZE)
         if icon is not None:
             disp.blit_mask(x + (cell_w - ICON_SIZE) // 2,
