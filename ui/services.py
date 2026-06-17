@@ -170,10 +170,7 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
     for i in range(log_scroll, len(logs)):
         if y > H - 24:
             break
-        ln = logs[i]
-        if focus == 'log' and i == log_scroll:
-            disp.fill_rect(8, y - 1, W - 16, 13, 0x3186)
-        disp.draw_text_pil(12, y, ln[:60], WHITE if focus == 'log' and i == log_scroll else LGRAY, size=10)
+        disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
 
     # 日志标签行高亮
