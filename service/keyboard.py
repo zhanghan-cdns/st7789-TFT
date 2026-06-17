@@ -51,22 +51,17 @@ class KeyReader:
     def __init__(self, debug=True):
         self.debug = debug
         self.mode = None
-        self._evfds = []
+        self._ev = {}                       # path -> fd（已打开的输入事件设备）
         self._tty_fd = None
         self._tty_old = None
+        self._scan_interval = 2.0           # 热插拔重扫间隔（秒）
+        self._last_scan = time.monotonic()
 
-        # 1) 优先 evdev：打开所有可读的输入事件设备
-        paths = sorted(glob.glob('/dev/input/event*'))
-        print(f"[按键] 扫描到输入设备: {paths}")
-        for path in paths:
-            try:
-                self._evfds.append(os.open(path, os.O_RDONLY | os.O_NONBLOCK))
-            except OSError as e:
-                if self.debug:
-                    print(f"[按键] 打开 {path} 失败: {e}")
-        if self._evfds:
+        # 1) 优先 evdev：打开当前所有可读的输入事件设备
+        self._scan_evdev(initial=True)
+        if self._ev:
             self.mode = 'evdev'
-            print(f"[按键] 使用 evdev，监听 {len(self._evfds)} 个输入设备，"
+            print(f"[按键] 使用 evdev，监听 {len(self._ev)} 个输入设备，"
                   f"_EV_SIZE={_EV_SIZE}")
             return
 
@@ -82,22 +77,79 @@ class KeyReader:
                   "（直插键盘请用 sudo 运行以读取 /dev/input/event*）")
 
     def poll(self, timeout):
-        """等待至多 timeout 秒，返回 'left'/'right'/'quit' 或 None"""
-        if self.mode == 'evdev':
+        """等待至多 timeout 秒，返回 'up'/'down'/'left'/'right'/'enter'/'back'/'quit' 或 None。
+
+        每隔 _scan_interval 秒重扫一次输入设备，支持键盘热插拔（先开程序后插键盘）。
+        """
+        now = time.monotonic()
+        if now - self._last_scan >= self._scan_interval:
+            self._last_scan = now
+            self._scan_evdev()
+        if self._ev:                        # 只要有 evdev 设备就优先用它
             return self._poll_evdev(timeout)
         if self.mode == 'tty':
             return self._poll_tty(timeout)
         time.sleep(timeout)
         return None
 
+    def _scan_evdev(self, initial=False):
+        """扫描 /dev/input/event*，打开新出现的设备（支持热插拔）"""
+        try:
+            paths = sorted(glob.glob('/dev/input/event*'))
+        except OSError:
+            return
+        if initial:
+            print(f"[按键] 扫描到输入设备: {paths}")
+        for path in paths:
+            if path in self._ev:            # 已打开，跳过
+                continue
+            try:
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+            except OSError as e:
+                if self.debug and initial:
+                    print(f"[按键] 打开 {path} 失败: {e}")
+                continue
+            self._ev[path] = fd
+            if not initial:
+                print(f"[按键] 检测到新输入设备 {path}，已接入")
+
+    def _close_fd(self, fd):
+        """按 fd 关闭并从设备表中移除（设备被拔出时调用）"""
+        for p, f in list(self._ev.items()):
+            if f == fd:
+                del self._ev[p]
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
+    def _drop_dead(self):
+        """清理已失效的 fd（select 报错时调用）"""
+        for p, f in list(self._ev.items()):
+            try:
+                os.fstat(f)
+            except OSError:
+                del self._ev[p]
+                try:
+                    os.close(f)
+                except OSError:
+                    pass
+
     def _poll_evdev(self, timeout):
-        r, _, _ = select.select(self._evfds, [], [], timeout)
-        if not r:
+        fds = list(self._ev.values())
+        if not fds:
+            time.sleep(timeout)
+            return None
+        try:
+            r, _, _ = select.select(fds, [], [], timeout)
+        except (OSError, ValueError):
+            self._drop_dead()               # 有设备被拔出，清理失效 fd
             return None
         for fd in r:
             try:
                 data = os.read(fd, _EV_SIZE * 64)
             except OSError:
+                self._close_fd(fd)          # 设备被拔出
                 continue
             for off in range(0, len(data) - _EV_SIZE + 1, _EV_SIZE):
                 _, _, etype, code, value = struct.unpack(
@@ -133,10 +185,11 @@ class KeyReader:
         return None
 
     def restore(self):
-        for fd in self._evfds:
+        for fd in list(self._ev.values()):
             try:
                 os.close(fd)
             except OSError:
                 pass
+        self._ev.clear()
         if self.mode == 'tty' and self._tty_old is not None:
             termios.tcsetattr(self._tty_fd, termios.TCSADRAIN, self._tty_old)
