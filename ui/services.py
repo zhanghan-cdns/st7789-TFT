@@ -86,13 +86,16 @@ def draw_services(disp, services, cursor=0, scroll=0):
     disp.flush()
 
 
-def draw_service_detail(disp, detail, action_cursor=0, msg=''):
+def draw_service_detail(disp, detail, action_cursor=0, msg='',
+                        focus='action', log_scroll=0):
     """绘制系统服务详情页：状态信息 + 操作按钮 + 最近日志
 
     参数：
       detail        — get_service_status 返回的字典，None 表示加载中
       action_cursor — 当前选中的操作按钮索引（见 ACTIONS）
       msg           — 操作结果/状态提示文本
+      focus         — 焦点区域：'action' 按钮区 / 'log' 日志区
+      log_scroll    — 日志滚动偏移行数
     """
     W = disp.width
     H = disp.height
@@ -135,11 +138,11 @@ def draw_service_detail(disp, detail, action_cursor=0, msg=''):
         disp.draw_text_pil(12, y, desc[:40], DGRAY, size=11)
     y += 18
 
-    # 操作按钮（←→ 选择，Enter 执行）
+    # 操作按钮
     bw, bh, gap = 92, 26, 8
     for i, (_, label) in enumerate(ACTIONS):
         x = 12 + i * (bw + gap)
-        sel = (i == action_cursor)
+        sel = (i == action_cursor and focus == 'action')
         disp.fill_round_rect(x, y, bw, bh, 6, GREEN if sel else CARD)
         tw = disp.text_width_pil(label, 13)
         disp.draw_text_pil(x + (bw - tw) // 2, y + 6, label,
@@ -150,14 +153,28 @@ def draw_service_detail(disp, detail, action_cursor=0, msg=''):
         disp.draw_text_pil(12, y, msg[:40], YELLOW, size=12)
     y += 18
 
-    # 最近日志
+    # 日志区
+    log_y = y
+    logs = detail.get('logs', [])
+    max_scroll = max(0, len(logs) - 1)
+    if log_scroll > max_scroll:
+        log_scroll = max_scroll
     disp.draw_text_pil(12, y, "日志:", LGRAY, size=11)
     y += 15
-    for ln in detail.get('logs', []):
+    for i in range(log_scroll, len(logs)):
         if y > H - 24:
             break
-        disp.draw_text_pil(12, y, ln[:60], LGRAY, size=10)
+        ln = logs[i]
+        if focus == 'log' and i == log_scroll:
+            disp.fill_rect(8, y - 1, W - 16, 13, 0x3186)
+        disp.draw_text_pil(12, y, ln[:60], WHITE if focus == 'log' and i == log_scroll else LGRAY, size=10)
         y += 13
 
-    disp.draw_text_pil(6, H - 12, "←→选择 Enter执行 Esc返回", DGRAY, size=10)
+    # 日志标签行高亮
+    if focus == 'log':
+        disp.fill_rect(8, log_y - 2, W - 16, 15, 0x2108)
+
+    hint = ("←→按钮 ↓日志区 Enter执行" if focus == 'action'
+            else "↑↓滚动 ←→按钮区 Esc返回")
+    disp.draw_text_pil(6, H - 12, hint, DGRAY, size=10)
     disp.flush()

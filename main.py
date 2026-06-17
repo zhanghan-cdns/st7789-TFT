@@ -64,6 +64,8 @@ def main():
     services_scroll = 0
     detail_name = ''            # 当前详情页对应的服务名
     detail_action = 0           # 详情页操作按钮光标（见 SVC_ACTIONS）
+    detail_focus = 'action'     # 焦点区域：'action' 按钮区 / 'log' 日志区
+    detail_scroll = 0           # 日志滚动偏移
     detail_msg = ''             # 详情页操作结果提示
     detail_sampler = None       # 详情页状态/日志后台采样器
     action_state = {'pending': False, 'done': False, 'msg': ''}  # 控制操作线程结果
@@ -187,7 +189,8 @@ def main():
                     draw_services(disp, services_data, services_cursor, services_scroll)
                 elif view == 'service_detail':
                     detail = detail_sampler.get() if detail_sampler else None
-                    draw_service_detail(disp, detail, detail_action, detail_msg)
+                    draw_service_detail(disp, detail, detail_action, detail_msg,
+                                       detail_focus, detail_scroll)
                 elif view == 'music':
                     draw_music(disp, music_songs, music_cursor, music_scroll,
                                music_playing_index, player.status(), music_loading)
@@ -229,6 +232,8 @@ def main():
                     view = 'music'
                 elif view == 'service_detail':
                     view = 'services'
+                    detail_focus = 'action'
+                    detail_scroll = 0
                     if detail_sampler is not None:
                         detail_sampler.stop()
                         detail_sampler = None
@@ -256,6 +261,8 @@ def main():
                     # 进入服务详情页，启动后台采样（状态+日志，每 2 秒刷新）
                     detail_name = services_data[services_cursor][0]
                     detail_action = 0
+                    detail_focus = 'action'
+                    detail_scroll = 0
                     detail_msg = ''
                     if detail_sampler is not None:
                         detail_sampler.stop()
@@ -269,21 +276,38 @@ def main():
 
             # ---------- 系统服务详情页 ----------
             elif view == 'service_detail':
-                if key in ('left', 'up'):
-                    detail_action = (detail_action - 1) % len(SVC_ACTIONS)
-                    need_render = True
-                elif key in ('right', 'down'):
-                    detail_action = (detail_action + 1) % len(SVC_ACTIONS)
-                    need_render = True
-                elif key == 'enter' and not action_state['pending']:
-                    action_state['pending'] = True
-                    action_state['done'] = False
-                    detail_msg = '执行中...'
-                    act = SVC_ACTIONS[detail_action][0]
-                    threading.Thread(target=run_action,
-                                     args=(detail_name, act),
-                                     daemon=True).start()
-                    need_render = True
+                if detail_focus == 'action':
+                    if key in ('left', 'up'):
+                        detail_action = (detail_action - 1) % len(SVC_ACTIONS)
+                        need_render = True
+                    elif key == 'right':
+                        detail_action = (detail_action + 1) % len(SVC_ACTIONS)
+                        need_render = True
+                    elif key == 'down':
+                        detail_focus = 'log'
+                        detail_scroll = 0
+                        need_render = True
+                    elif key == 'enter' and not action_state['pending']:
+                        action_state['pending'] = True
+                        action_state['done'] = False
+                        detail_msg = '执行中...'
+                        act = SVC_ACTIONS[detail_action][0]
+                        threading.Thread(target=run_action,
+                                         args=(detail_name, act),
+                                         daemon=True).start()
+                        need_render = True
+                elif detail_focus == 'log':
+                    if key == 'up' and detail_scroll > 0:
+                        detail_scroll -= 1
+                        need_render = True
+                    elif key == 'down':
+                        max_scroll = max(0, len(detail_sampler.get().get('logs', [])) - 1) if detail_sampler and detail_sampler.get() else 0
+                        if detail_scroll < max_scroll:
+                            detail_scroll += 1
+                            need_render = True
+                    elif key in ('left', 'right'):
+                        detail_focus = 'action'
+                        need_render = True
 
             # ---------- 音乐列表页 ----------
             elif view == 'music':
