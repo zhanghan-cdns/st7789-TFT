@@ -257,6 +257,9 @@ def main():
                     if camera_sampler is not None:
                         camera_sampler.stop()
                         camera_sampler = None
+                elif view == 'clock':
+                    draw_clock._prev = None
+                    view = 'menu'
                 else:
                     view = 'menu'
                 need_render = True
