@@ -276,6 +276,24 @@ class ST7789:
         self._dc_line.set_value(1)
         self._spi_write(self.fbuf)
 
+    def flush_rect(self, x, y, w, h):
+        """仅刷新指定矩形区域到屏幕（局部动画用，减少 SPI 传输量、保证流畅）"""
+        x0 = max(0, x); y0 = max(0, y)
+        x1 = min(self.width, x + w); y1 = min(self.height, y + h)
+        if x0 >= x1 or y0 >= y1:
+            return
+        self.set_window(x0, y0, x1 - 1, y1 - 1)
+        stride = self.width * 2
+        row_bytes = (x1 - x0) * 2
+        buf = bytearray(row_bytes * (y1 - y0))
+        pos = 0
+        for py in range(y0, y1):
+            off = py * stride + x0 * 2
+            buf[pos:pos + row_bytes] = self.fbuf[off:off + row_bytes]
+            pos += row_bytes
+        self._dc_line.set_value(1)
+        self._spi_write(buf)
+
     # ==================== 字体绘制 ====================
     def draw_char(self, x, y, ch, color, scale=1):
         glyph = font_glyph(ch)

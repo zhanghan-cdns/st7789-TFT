@@ -61,6 +61,7 @@ def main():
     # 视图状态：'menu' 首页 / 'dashboard' / 'clock' / 'services' / 'music'
     view = 'menu'
     menu_cursor = 0
+    clock_theme = 'dark'        # 翻页时钟主题：'dark' / 'light'
     services_cursor = 0
     services_scroll = 0
     detail_name = ''            # 当前详情页对应的服务名
@@ -187,7 +188,8 @@ def main():
                                time.strftime('%H:%M:%S', lt),
                                time.strftime('%Y-%m-%d', lt),
                                WEEKDAYS[lt.tm_wday],
-                               lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday))
+                               lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday),
+                               theme=clock_theme)
                 elif view == 'services':
                     draw_services(disp, services_data, services_cursor, services_scroll)
                 elif view == 'service_detail':
@@ -261,6 +263,12 @@ def main():
                 continue
             if key == 'quit':
                 break
+
+            # ---------- 时钟页：Enter 切换深/浅主题 ----------
+            if view == 'clock':
+                if key == 'enter':
+                    clock_theme = 'light' if clock_theme == 'dark' else 'dark'
+                    need_render = True
 
             # ---------- 系统服务页 ----------
             if view == 'services':

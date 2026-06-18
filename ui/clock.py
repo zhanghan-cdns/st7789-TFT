@@ -1,105 +1,199 @@
-"""时钟页（第二屏）
+"""时钟页（第二屏）— 网页风格翻页时钟
 
-布局：翻页牌样式的 HH:MM（大）+ 秒（小）+ 公历日期/星期 + 农历。
-数字变化时播放入滑出式翻页动画。
+时分秒三组、共 6 位独立翻页组件。每位数字分三层渲染：
+  · 上遮罩（静态上半，显示新数字上半）
+  · 下遮罩（静态下半，显示旧数字下半，直到叶片落下）
+  · 翻转叶片（沿水平中轴竖向压缩/展开模拟 180° 翻转，叠加折叠内阴影）
+数字变更时仅对变化位播放缓动翻页动画，并用驱动局部刷新保证流畅。
+支持深色 / 浅色双主题（由 main 传入 theme 切换）。
 """
+import os
+import json
 import time as _time
-from color import BLACK, WHITE, CYAN, YELLOW, LGRAY, DGRAY
 
-CARD_HI = 0x3186
-CARD_LO = 0x18E3
+from PIL import Image, ImageDraw, ImageFont
 
+from color import BLACK, WHITE, CYAN, YELLOW, LGRAY, DGRAY, BLUE, ORANGE
 
-def _draw_card_bg(disp, x, y, w, h):
-    r = 6
-    seam = 3
-    top_h = (h - seam) // 2
-    disp.fill_round_rect(x, y, w, top_h, r, CARD_HI)
-    disp.fill_round_rect(x, y + top_h + seam, w, h - top_h - seam, r, CARD_LO)
+# ── 布局常量 ──
+CW, CH = 44, 84              # 单个翻页位宽高
+R, SEAM = 6, 3              # 圆角半径 / 中缝（上下两半之间的黑缝）
+TOP_H = (CH - SEAM) // 2     # 上半高
+BOT_H = CH - TOP_H - SEAM    # 下半高
+CARD_Y = 50                 # 翻页位顶部 y
+SIZE = 74                   # 数字字号
+SLOT_X = [6, 54, 114, 162, 222, 270]   # 6 位的 x（HH MM SS）
+COLON_CX = [106, 214]       # 两个冒号中心 x（时|分、分|秒之间）
+FRAMES = 7                  # 单次翻页帧数
+SHADOW_MAX = 120            # 折叠阴影最大 alpha
 
+# ── 双主题配色（RGB565）──
+THEMES = {
+    'dark': dict(bg=BLACK, hi=0x3186, lo=0x18E3, digit=WHITE, sep=CYAN,
+                 date=LGRAY, lunar=YELLOW, hint=DGRAY, shadow=BLACK),
+    'light': dict(bg=0xE71C, hi=0xFFFF, lo=0xCE79, digit=0x2104, sep=BLUE,
+                  date=0x4208, lunar=ORANGE, hint=0x8410, shadow=BLACK),
+}
 
-def _flip_card(disp, x, y, w, h, text, size, fg):
-    tw, th = disp.text_size_pil(text, size)
-    _draw_card_bg(disp, x, y, w, h)
-    disp.draw_text_pil(x + (w - tw) // 2, y + (h - th) // 2, text, fg,
-                       size=size, clip=(x, y, x + w, y + h))
-
-
-def _animate_slide(disp, x, y, w, h, text, size, fg, frames=5):
-    """新数字从卡片底缘滑入并定位到居中（裁剪在卡片内，阻塞 ~200ms）"""
-    tw, th = disp.text_size_pil(text, size)
-    end_top = (h - th) // 2          # 终点：与静态帧一致的居中位置
-    start_top = h                    # 起点：卡片底缘下方（被裁剪不可见）
-    clip = (x, y, x + w, y + h)
-    for i in range(1, frames + 1):
-        top = int(start_top + (end_top - start_top) * (i / frames))
-        _draw_card_bg(disp, x, y, w, h)
-        disp.draw_text_pil(x + (w - tw) // 2, y + top, text, fg,
-                           size=size, clip=clip)
-        disp.flush()
-        _time.sleep(0.04)
+_FONT_CACHE = {}
+_MASK_CACHE = {}
 
 
-def draw_clock(disp, time_str, date_str, week_str, lunar_str):
-    W = disp.width
-    H = disp.height
-    disp.fill_screen(BLACK)
+def _font(size):
+    """按字号加载字体（读 config.json 的 font_paths，失败回退默认）"""
+    if size in _FONT_CACHE:
+        return _FONT_CACHE[size]
+    paths = []
+    try:
+        cfg = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                           'config.json')
+        with open(cfg, 'r', encoding='utf-8') as f:
+            paths = json.load(f).get('font_paths', [])
+    except (IOError, OSError, ValueError):
+        pass
+    font = None
+    for p in paths:
+        try:
+            font = ImageFont.truetype(p, size)
+            break
+        except (IOError, OSError):
+            continue
+    if font is None:
+        font = ImageFont.load_default()
+    _FONT_CACHE[size] = font
+    return font
+
+
+def _digit_halves(ch):
+    """返回数字 ch 居中绘制后裁出的 (上半掩码, 下半掩码) PIL 'L' 图，带缓存"""
+    if ch in _MASK_CACHE:
+        return _MASK_CACHE[ch]
+    img = Image.new('L', (CW, CH), 0)
+    d = ImageDraw.Draw(img)
+    font = _font(SIZE)
+    bbox = d.textbbox((0, 0), ch, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    px = (CW - tw) // 2 - bbox[0]
+    py = (CH - th) // 2 - bbox[1]
+    d.text((px, py), ch, font=font, fill=255)
+    top = img.crop((0, 0, CW, TOP_H))
+    bot = img.crop((0, TOP_H + SEAM, CW, CH))
+    _MASK_CACHE[ch] = (top, bot)
+    return top, bot
+
+
+def _card_bg(disp, x, th):
+    """画单个翻页位底卡：上半较亮、下半较暗的圆角卡，中缝留底色"""
+    disp.fill_rect(x, CARD_Y, CW, CH, th['bg'])
+    disp.fill_round_rect(x, CARD_Y, CW, TOP_H, R, th['hi'])
+    disp.fill_round_rect(x, CARD_Y + TOP_H + SEAM, CW, BOT_H, R, th['lo'])
+
+
+def _draw_static(disp, x, ch, th):
+    """静态绘制一个完整数字位（无动画）"""
+    _card_bg(disp, x, th)
+    top, bot = _digit_halves(ch)
+    disp.blit_mask(x, CARD_Y, top, th['digit'])
+    disp.blit_mask(x, CARD_Y + TOP_H + SEAM, bot, th['digit'])
+
+
+def _ease(t):
+    """easeInOutCubic：起止平滑、中段加速，带轻微回弹观感"""
+    return 4 * t * t * t if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
+
+
+def _leaf(disp, x, y, h, half_mask, panel, th, alpha):
+    """绘制一片翻转叶片：压缩后的面板 + 数字半，叠加折叠内阴影"""
+    if h < 1:
+        return
+    disp.fill_rect(x, y, CW, h, panel)
+    dm = half_mask.resize((CW, h), Image.BILINEAR)
+    disp.blit_mask(x, y, dm, th['digit'])
+    if alpha > 0:
+        disp.blit_mask(x, y, Image.new('L', (CW, h), alpha), th['shadow'])
+
+
+def _compose(disp, x, old_ch, new_ch, t, th):
+    """合成一帧：静态上半=新、静态下半=旧，叶片按相位翻转"""
+    _card_bg(disp, x, th)
+    n_top, n_bot = _digit_halves(new_ch)
+    o_top, o_bot = _digit_halves(old_ch)
+    disp.blit_mask(x, CARD_Y, n_top, th['digit'])                 # 上半：新
+    disp.blit_mask(x, CARD_Y + TOP_H + SEAM, o_bot, th['digit'])  # 下半：旧
+    if t < 0.5:
+        # 相位 1：旧上半沿中轴向下折叠（高度 1→0，下沿固定在中轴）
+        p = t / 0.5
+        h = max(0, round(TOP_H * (1 - p)))
+        _leaf(disp, x, CARD_Y + TOP_H - h, h, o_top, th['hi'], th,
+              int(SHADOW_MAX * p))
+    else:
+        # 相位 2：新下半沿中轴向下展开（高度 0→1，上沿固定在中轴）
+        p = (t - 0.5) / 0.5
+        h = max(0, round(BOT_H * p))
+        _leaf(disp, x, CARD_Y + TOP_H + SEAM, h, n_bot, th['lo'], th,
+              int(SHADOW_MAX * (1 - p)))
+
+
+def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
+    """绘制翻页时钟页
+
+    参数：
+      time_str — "HH:MM:SS"；date_str/week_str/lunar_str — 日期/星期/农历
+      theme    — 'dark' 或 'light'
+    """
+    W, H = disp.width, disp.height
+    th = THEMES.get(theme, THEMES['dark'])
 
     parts = (time_str.split(':') + ['00', '00', '00'])[:3]
-    hh, mm, ss = (p.zfill(2)[:2] for p in parts)
+    digits = ''.join(p.zfill(2)[:2] for p in parts)  # 6 位 HHMMSS
 
-    cw, ch = 54, 96
-    igap = 6
-    colon_w = 22
-    sw, sh = 40, 52
-    sgap = 8
-    group_w = cw * 2 + igap
-    total = group_w + colon_w + group_w + sgap + sw
-    x0 = (W - total) // 2
-    card_y = 42
-
-    # 冒号闪烁
-    if int(ss) % 2 == 0:
-        cx = x0 + group_w + colon_w // 2
-        cy = card_y + ch // 2
-        disp.fill_circle(cx, cy - 18, 5, CYAN)
-        disp.fill_circle(cx, cy + 18, 5, CYAN)
-
-    # 底部信息
-    date_line = f"{date_str}  {week_str}"
-    dw, _ = disp.text_size_pil(date_line, 18)
-    lw, _ = disp.text_size_pil(lunar_str, 20)
-    y = card_y + ch + 14
-    disp.draw_text_pil((W - dw) // 2, y, date_line, LGRAY, size=18)
-    y += disp.text_size_pil(date_line, 18)[1] + 10
-    disp.draw_text_pil((W - lw) // 2, y, lunar_str, YELLOW, size=20)
-
-    hint = "\u2190 \u2192 \u5207\u6362"
-    hw, _ = disp.text_size_pil(hint, 10)
-    disp.draw_text_pil((W - hw) // 2, H - 14, hint, DGRAY, size=10)
-
-    # ── 数字卡片 ──
-    cards = [
-        # (x, y, w, h, text, size, fg)
-        (x0,              card_y, cw, ch, hh[0], 64, WHITE),
-        (x0 + cw + igap,  card_y, cw, ch, hh[1], 64, WHITE),
-        (x0 + group_w + colon_w, card_y, cw, ch, mm[0], 64, WHITE),
-        (x0 + group_w + colon_w + cw + igap, card_y, cw, ch, mm[1], 64, WHITE),
-        (x0 + group_w + colon_w + group_w + sgap,
-         card_y + (ch - sh) // 2, sw, sh, ss, 28, LGRAY),
-    ]
-
-    # 先画出所有卡片背景 + 静态数字
-    for cx, cy_, cw_, ch_, text, size, fg in cards:
-        _flip_card(disp, cx, cy_, cw_, ch_, text, size, fg)
-
-    # ── 翻页动画：检测数字变化，对变化位播放入滑 ──
     prev = getattr(draw_clock, '_prev', None)
-    draw_clock._prev = tuple(c[-3] for c in cards)  # 纯数字字符串
+    prev_theme = getattr(draw_clock, '_theme', None)
+    draw_clock._prev = digits
+    draw_clock._theme = theme
+    # 仅当上次有记录且主题未变时才做翻页动画
+    animate = prev is not None and prev_theme == theme and len(prev) == 6
 
-    if prev:
-        for i, (cx, cy_, cw_, ch_, text, size, fg) in enumerate(cards):
-            if prev[i] != text:
-                _animate_slide(disp, cx, cy_, cw_, ch_, text, size, fg)
+    # ── 全屏静态底：背景 + 冒号 + 日期/农历 + 6 位数字（动画时数字先画旧值）──
+    disp.fill_screen(th['bg'])
+    if int(digits[4:6]) % 2 == 0:                    # 冒号每秒闪烁
+        cy = CARD_Y + CH // 2
+        for cxc in COLON_CX:
+            disp.fill_circle(cxc, cy - 15, 4, th['sep'])
+            disp.fill_circle(cxc, cy + 15, 4, th['sep'])
 
+    date_line = f"{date_str}  {week_str}"
+    dw, dh = disp.text_size_pil(date_line, 18)
+    lw, _ = disp.text_size_pil(lunar_str, 20)
+    y = CARD_Y + CH + 12
+    disp.draw_text_pil((W - dw) // 2, y, date_line, th['date'], size=18)
+    y += dh + 10
+    disp.draw_text_pil((W - lw) // 2, y, lunar_str, th['lunar'], size=20)
+    hint = "Enter: theme   \u2190 \u2192 back"
+    hw, _ = disp.text_size_pil(hint, 10)
+    disp.draw_text_pil((W - hw) // 2, H - 14, hint, th['hint'], size=10)
+
+    base = prev if animate else digits
+    for i, xx in enumerate(SLOT_X):
+        _draw_static(disp, xx, base[i], th)
     disp.flush()
+
+    if not animate:
+        return
+    changed = [i for i in range(6) if prev[i] != digits[i]]
+    if not changed:
+        return
+
+    # ── 翻页动画：仅重绘变化位，局部刷新其外接矩形 ──
+    minx = min(SLOT_X[i] for i in changed)
+    maxx = max(SLOT_X[i] + CW for i in changed)
+    for f in range(1, FRAMES + 1):
+        t = _ease(f / FRAMES)
+        for i in changed:
+            _compose(disp, SLOT_X[i], prev[i], digits[i], t, th)
+        disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
+        _time.sleep(0.012)
+    # 收尾：还原圆角静态新数字
+    for i in changed:
+        _draw_static(disp, SLOT_X[i], digits[i], th)
+    disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
