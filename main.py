@@ -59,7 +59,7 @@ def main():
     get_cpu_usage()  # 预热，建立 CPU 采样基准
 
     # 视图状态：'menu' 首页 / 'dashboard' / 'clock' / 'services' / 'music'
-    view = 'menu'
+    view = 'clock'
     menu_cursor = 0
     clock_theme = 'dark'        # 翻页时钟主题：'dark' / 'light'
     services_cursor = 0
