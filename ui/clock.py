@@ -144,6 +144,18 @@ def _digit_halves(ch):
     return top, bot
 
 
+def _restore_card(disp, x, th):
+    """将单个翻页位恢复为纯背景（背景图或纯色），避免动画累积透明度"""
+    if _BG_RAW is not None:
+        stride = disp.width * 2
+        base = CARD_Y * stride + x * 2
+        for row in range(CH):
+            off = base + row * stride
+            disp.fbuf[off:off + CW * 2] = _BG_RAW[off:off + CW * 2]
+    else:
+        disp.fill_rect(x, CARD_Y, CW, CH, th['bg'])
+
+
 def _card_bg(disp, x, th, alpha=255):
     """半透明翻页位底卡：blit_mask 叠加圆角遮罩，中缝留底色"""
     mt = _rr_mask(CW, TOP_H, R, alpha)
@@ -178,6 +190,7 @@ def _leaf(disp, x, y, h, half_mask, panel, th, alpha):
 
 def _compose(disp, x, old_ch, new_ch, t, th, alpha=255):
     """合成一帧：静态上半=新、静态下半=旧，叶片按相位翻转"""
+    _restore_card(disp, x, th)
     _card_bg(disp, x, th, alpha)
     n_top, n_bot = _digit_halves(new_ch)
     o_top, o_bot = _digit_halves(old_ch)
@@ -261,5 +274,6 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
         _time.sleep(0.012)
     # 收尾：还原圆角静态新数字
     for i in changed:
+        _restore_card(disp, SLOT_X[i], th)
         _draw_static(disp, SLOT_X[i], digits[i], th, alpha=CARD_ALPHA)
     disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
