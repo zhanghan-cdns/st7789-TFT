@@ -41,7 +41,7 @@ _FONT_CACHE = {}
 _MASK_CACHE = {}
 
 # ── 卡片半透明 alpha（0~255）──
-CARD_ALPHA = 200
+CARD_ALPHA = 140
 _RR_CACHE = {}
 
 
