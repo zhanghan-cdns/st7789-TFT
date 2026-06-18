@@ -42,17 +42,45 @@ _MASK_CACHE = {}
 
 # ── 卡片半透明 alpha（0~255）──
 CARD_ALPHA = 140
-_RR_CACHE = {}
+_LUT_CACHE = {}
 
 
-def _rr_mask(w, h, r, fill=255):
-    """缓存圆角矩形 'L' 遮罩（fill=alpha 0~255）"""
-    key = (w, h, r, fill)
-    if key not in _RR_CACHE:
-        m = Image.new('L', (w, h), 0)
-        ImageDraw.Draw(m).rounded_rectangle((0, 0, w - 1, h - 1), radius=r, fill=fill)
-        _RR_CACHE[key] = m
-    return _RR_CACHE[key]
+def _build_lut(color, alpha):
+    """预计算 65536 项混合 LUT：输入背景色 → 输出混合色"""
+    key = (color, alpha)
+    if key in _LUT_CACHE:
+        return _LUT_CACHE[key]
+    fr = ((color >> 11) & 0x1F) << 3
+    fg = ((color >> 5) & 0x3F) << 2
+    fb = (color & 0x1F) << 3
+    inv = 255 - alpha
+    lut = [0] * 65536
+    for bg in range(65536):
+        br = ((bg >> 11) & 0x1F) << 3
+        bg_ = ((bg >> 5) & 0x3F) << 2
+        bb = (bg & 0x1F) << 3
+        r = (fr * alpha + br * inv) // 255
+        g = (fg * alpha + bg_ * inv) // 255
+        b = (fb * alpha + bb * inv) // 255
+        lut[bg] = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3)
+    _LUT_CACHE[key] = lut
+    return lut
+
+
+def _blend_rect(disp, x, y, w, h, lut):
+    """用 LUT 对矩形区域做 alpha 混合（直接帧缓冲，避免 PIL blit_mask 开销）"""
+    if w <= 0 or h <= 0:
+        return
+    stride = disp.width * 2
+    for row in range(y, y + h):
+        off = row * stride + x * 2
+        end = off + w * 2
+        while off < end:
+            bg = (disp.fbuf[off] << 8) | disp.fbuf[off + 1]
+            c = lut[bg]
+            disp.fbuf[off] = (c >> 8) & 0xFF
+            disp.fbuf[off + 1] = c & 0xFF
+            off += 2
 
 # ── 背景图 ──
 _BG_URL = 'http://oss.eleksmaker.com/nk/nk7d1.jpg'
@@ -157,11 +185,23 @@ def _restore_card(disp, x, th):
 
 
 def _card_bg(disp, x, th, alpha=255):
-    """半透明翻页位底卡：blit_mask 叠加圆角遮罩，中缝留底色"""
-    mt = _rr_mask(CW, TOP_H, R, alpha)
-    mb = _rr_mask(CW, BOT_H, R, alpha)
-    disp.blit_mask(x, CARD_Y, mt, th['hi'])
-    disp.blit_mask(x, CARD_Y + TOP_H + SEAM, mb, th['lo'])
+    """半透明翻页位底卡：LUT 混合圆角矩形，中缝留底色"""
+    lut_hi = _build_lut(th['hi'], alpha)
+    lut_lo = _build_lut(th['lo'], alpha)
+    r = R
+    # 上半
+    _blend_rect(disp, x, CARD_Y + r, CW, TOP_H - 2 * r, lut_hi)
+    for dy in range(r):
+        dx = r - int((r * r - (r - dy) * (r - dy)) ** 0.5)
+        _blend_rect(disp, x + dx, CARD_Y + dy, CW - 2 * dx, 1, lut_hi)
+        _blend_rect(disp, x + dx, CARD_Y + TOP_H - 1 - dy, CW - 2 * dx, 1, lut_hi)
+    # 下半
+    yb = CARD_Y + TOP_H + SEAM
+    _blend_rect(disp, x, yb + r, CW, BOT_H - 2 * r, lut_lo)
+    for dy in range(r):
+        dx = r - int((r * r - (r - dy) * (r - dy)) ** 0.5)
+        _blend_rect(disp, x + dx, yb + dy, CW - 2 * dx, 1, lut_lo)
+        _blend_rect(disp, x + dx, yb + BOT_H - 1 - dy, CW - 2 * dx, 1, lut_lo)
 
 
 def _draw_static(disp, x, ch, th, alpha=255):
@@ -263,17 +303,15 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     if not changed:
         return
 
-    # ── 翻页动画：仅重绘变化位，局部刷新其外接矩形 ──
-    minx = min(SLOT_X[i] for i in changed)
-    maxx = max(SLOT_X[i] + CW for i in changed)
+    # ── 翻页动画：每张卡片独立刷新，避免外接矩形刷入大量间隔像素 ──
     for f in range(1, FRAMES + 1):
         t = _ease(f / FRAMES)
         for i in changed:
             _compose(disp, SLOT_X[i], prev[i], digits[i], t, th, alpha=CARD_ALPHA)
-        disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
+            disp.flush_rect(SLOT_X[i], CARD_Y, CW, CH)
         _time.sleep(0.012)
     # 收尾：还原圆角静态新数字
     for i in changed:
         _restore_card(disp, SLOT_X[i], th)
         _draw_static(disp, SLOT_X[i], digits[i], th, alpha=CARD_ALPHA)
-    disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
+        disp.flush_rect(SLOT_X[i], CARD_Y, CW, CH)
