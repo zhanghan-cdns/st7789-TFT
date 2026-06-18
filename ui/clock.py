@@ -10,6 +10,7 @@
 import os
 import io
 import json
+import math
 import time as _time
 import urllib.request
 
@@ -39,6 +40,22 @@ THEMES = {
 
 _FONT_CACHE = {}
 _MASK_CACHE = {}
+
+# ── 呼吸半透明 ──
+BREATH_MIN = 160
+BREATH_MAX = 240
+BREATH_PERIOD = 4.0          # 秒/周期
+_RR_CACHE = {}
+
+
+def _rr_mask(w, h, r, fill=255):
+    """缓存圆角矩形 'L' 遮罩（fill=alpha 0~255）"""
+    key = (w, h, r, fill)
+    if key not in _RR_CACHE:
+        m = Image.new('L', (w, h), 0)
+        ImageDraw.Draw(m).rounded_rectangle((0, 0, w - 1, h - 1), radius=r, fill=fill)
+        _RR_CACHE[key] = m
+    return _RR_CACHE[key]
 
 # ── 背景图 ──
 _BG_URL = 'http://oss.eleksmaker.com/nk/nk7d1.jpg'
@@ -130,16 +147,17 @@ def _digit_halves(ch):
     return top, bot
 
 
-def _card_bg(disp, x, th):
-    """画单个翻页位底卡：上半较亮、下半较暗的圆角卡，中缝留底色"""
-    disp.fill_rect(x, CARD_Y, CW, CH, th['bg'])
-    disp.fill_round_rect(x, CARD_Y, CW, TOP_H, R, th['hi'])
-    disp.fill_round_rect(x, CARD_Y + TOP_H + SEAM, CW, BOT_H, R, th['lo'])
+def _card_bg(disp, x, th, alpha=255):
+    """半透明翻页位底卡：blit_mask 叠加圆角遮罩，中缝留底色"""
+    mt = _rr_mask(CW, TOP_H, R, alpha)
+    mb = _rr_mask(CW, BOT_H, R, alpha)
+    disp.blit_mask(x, CARD_Y, mt, th['hi'])
+    disp.blit_mask(x, CARD_Y + TOP_H + SEAM, mb, th['lo'])
 
 
-def _draw_static(disp, x, ch, th):
+def _draw_static(disp, x, ch, th, alpha=255):
     """静态绘制一个完整数字位（无动画）"""
-    _card_bg(disp, x, th)
+    _card_bg(disp, x, th, alpha)
     top, bot = _digit_halves(ch)
     disp.blit_mask(x, CARD_Y, top, th['digit'])
     disp.blit_mask(x, CARD_Y + TOP_H + SEAM, bot, th['digit'])
@@ -161,9 +179,9 @@ def _leaf(disp, x, y, h, half_mask, panel, th, alpha):
         disp.blit_mask(x, y, Image.new('L', (CW, h), alpha), th['shadow'])
 
 
-def _compose(disp, x, old_ch, new_ch, t, th):
+def _compose(disp, x, old_ch, new_ch, t, th, alpha=255):
     """合成一帧：静态上半=新、静态下半=旧，叶片按相位翻转"""
-    _card_bg(disp, x, th)
+    _card_bg(disp, x, th, alpha)
     n_top, n_bot = _digit_halves(new_ch)
     o_top, o_bot = _digit_halves(old_ch)
     disp.blit_mask(x, CARD_Y, n_top, th['digit'])                 # 上半：新
@@ -191,6 +209,10 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     """
     W, H = disp.width, disp.height
     th = THEMES.get(theme, THEMES['dark'])
+
+    # 呼吸半透明 alpha
+    breath_alpha = int(BREATH_MIN + (BREATH_MAX - BREATH_MIN) *
+                       (1 + math.sin(_time.monotonic() * 2 * math.pi / BREATH_PERIOD)) / 2)
 
     parts = (time_str.split(':') + ['00', '00', '00'])[:3]
     digits = ''.join(p.zfill(2)[:2] for p in parts)  # 6 位 HHMMSS
@@ -226,7 +248,7 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
 
     base = prev if animate else digits
     for i, xx in enumerate(SLOT_X):
-        _draw_static(disp, xx, base[i], th)
+        _draw_static(disp, xx, base[i], th, alpha=breath_alpha)
     disp.flush()
 
     if not animate:
@@ -241,10 +263,10 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     for f in range(1, FRAMES + 1):
         t = _ease(f / FRAMES)
         for i in changed:
-            _compose(disp, SLOT_X[i], prev[i], digits[i], t, th)
+            _compose(disp, SLOT_X[i], prev[i], digits[i], t, th, alpha=breath_alpha)
         disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
         _time.sleep(0.012)
     # 收尾：还原圆角静态新数字
     for i in changed:
-        _draw_static(disp, SLOT_X[i], digits[i], th)
+        _draw_static(disp, SLOT_X[i], digits[i], th, alpha=breath_alpha)
     disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
