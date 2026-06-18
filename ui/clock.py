@@ -10,7 +10,6 @@
 import os
 import io
 import json
-import math
 import time as _time
 import urllib.request
 
@@ -41,10 +40,8 @@ THEMES = {
 _FONT_CACHE = {}
 _MASK_CACHE = {}
 
-# ── 呼吸半透明 ──
-BREATH_MIN = 160
-BREATH_MAX = 240
-BREATH_PERIOD = 4.0          # 秒/周期
+# ── 卡片半透明 alpha（0~255）──
+CARD_ALPHA = 200
 _RR_CACHE = {}
 
 
@@ -210,10 +207,6 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     W, H = disp.width, disp.height
     th = THEMES.get(theme, THEMES['dark'])
 
-    # 呼吸半透明 alpha
-    breath_alpha = int(BREATH_MIN + (BREATH_MAX - BREATH_MIN) *
-                       (1 + math.sin(_time.monotonic() * 2 * math.pi / BREATH_PERIOD)) / 2)
-
     parts = (time_str.split(':') + ['00', '00', '00'])[:3]
     digits = ''.join(p.zfill(2)[:2] for p in parts)  # 6 位 HHMMSS
 
@@ -248,7 +241,7 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
 
     base = prev if animate else digits
     for i, xx in enumerate(SLOT_X):
-        _draw_static(disp, xx, base[i], th, alpha=breath_alpha)
+        _draw_static(disp, xx, base[i], th, alpha=CARD_ALPHA)
     disp.flush()
 
     if not animate:
@@ -263,10 +256,10 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     for f in range(1, FRAMES + 1):
         t = _ease(f / FRAMES)
         for i in changed:
-            _compose(disp, SLOT_X[i], prev[i], digits[i], t, th, alpha=breath_alpha)
+            _compose(disp, SLOT_X[i], prev[i], digits[i], t, th, alpha=CARD_ALPHA)
         disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
         _time.sleep(0.012)
     # 收尾：还原圆角静态新数字
     for i in changed:
-        _draw_static(disp, SLOT_X[i], digits[i], th, alpha=breath_alpha)
+        _draw_static(disp, SLOT_X[i], digits[i], th, alpha=CARD_ALPHA)
     disp.flush_rect(minx, CARD_Y, maxx - minx, CH)
