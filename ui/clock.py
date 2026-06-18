@@ -8,8 +8,10 @@
 支持深色 / 浅色双主题（由 main 传入 theme 切换）。
 """
 import os
+import io
 import json
 import time as _time
+import urllib.request
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -37,6 +39,52 @@ THEMES = {
 
 _FONT_CACHE = {}
 _MASK_CACHE = {}
+
+# ── 背景图 ──
+_BG_URL = 'http://oss.eleksmaker.com/nk/nk7d1.jpg'
+_BG_CACHE = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                         'assets', 'clock_bg.raw')
+_BG_RAW = None
+
+
+def _load_bg(disp):
+    """下载/缓存背景图，转 RGB565 后缓存到内存；失败返回 False"""
+    global _BG_RAW
+    if _BG_RAW is not None:
+        return True
+    W, H = disp.width, disp.height
+    # 优先读本地缓存
+    try:
+        with open(_BG_CACHE, 'rb') as f:
+            data = f.read()
+            if len(data) == W * H * 2:
+                _BG_RAW = data
+                return True
+    except OSError:
+        pass
+    # 下载
+    try:
+        resp = urllib.request.urlopen(_BG_URL, timeout=10)
+        img = Image.open(io.BytesIO(resp.read())).convert('RGB')
+        if img.size != (W, H):
+            img = img.resize((W, H), Image.LANCZOS)
+        raw = bytearray(W * H * 2)
+        i = 0
+        for r, g, b in img.getdata():
+            rgb565 = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3)
+            raw[i] = (rgb565 >> 8) & 0xFF
+            raw[i + 1] = rgb565 & 0xFF
+            i += 2
+        _BG_RAW = bytes(raw)
+        try:
+            with open(_BG_CACHE, 'wb') as f:
+                f.write(_BG_RAW)
+        except OSError:
+            pass
+        return True
+    except Exception as e:
+        print(f"[clock] bg download failed: {e}")
+        return False
 
 
 def _font(size):
@@ -155,7 +203,10 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     animate = prev is not None and prev_theme == theme and len(prev) == 6
 
     # ── 全屏静态底：背景 + 冒号 + 日期/农历 + 6 位数字（动画时数字先画旧值）──
-    disp.fill_screen(th['bg'])
+    if _load_bg(disp):
+        disp.fbuf[:] = _BG_RAW
+    else:
+        disp.fill_screen(th['bg'])
     if int(digits[4:6]) % 2 == 0:                    # 冒号每秒闪烁
         cy = CARD_Y + CH // 2
         for cxc in COLON_CX:
