@@ -31,9 +31,9 @@ SHADOW_MAX = 120            # 折叠阴影最大 alpha
 
 # ── 双主题配色（RGB565）──
 THEMES = {
-    'dark': dict(bg=BLACK, hi=0x3186, lo=0x18E3, digit=WHITE, sep=CYAN,
+    'dark': dict(bg=BLACK, hi=0x3186, lo=0x18E3, digit=WHITE, sep=WHITE,
                  date=LGRAY, lunar=YELLOW, hint=DGRAY, shadow=BLACK),
-    'light': dict(bg=0xE71C, hi=0xFFFF, lo=0xCE79, digit=0x2104, sep=BLUE,
+    'light': dict(bg=0xE71C, hi=0xFFFF, lo=0xCE79, digit=0x2104, sep=WHITE,
                   date=0x4208, lunar=ORANGE, hint=0x8410, shadow=BLACK),
 }
 
