@@ -139,8 +139,11 @@ def main():
         import subprocess as _sp
         update_state['running'] = True
         update_state['lines'] = ['正在拉取更新...']
+        cwd = os.path.dirname(os.path.abspath(__file__))
         try:
-            r = _sp.run(['git', 'pull'], capture_output=True, text=True, timeout=30, cwd=os.path.dirname(os.path.abspath(__file__)))
+            _sp.run(['git', 'config', '--global', '--add', 'safe.directory', cwd],
+                    capture_output=True, text=True, timeout=10)
+            r = _sp.run(['git', 'pull'], capture_output=True, text=True, timeout=30, cwd=cwd)
             out = (r.stdout or '').strip()
             err = (r.stderr or '').strip()
             if out:
