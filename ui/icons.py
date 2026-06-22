@@ -18,6 +18,7 @@ _ICON_FILES = {
     'music': 'music.svg',
     'camera': 'camera.svg',
     'shutdown': 'poweroff.svg',
+    'update': 'update.svg',
 }
 
 _cache = {}

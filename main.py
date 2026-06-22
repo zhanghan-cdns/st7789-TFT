@@ -6,6 +6,7 @@
 import time
 import sys
 import glob
+import os
 import threading
 
 from st7789_driver import ST7789
@@ -73,6 +74,7 @@ def main():
     detail_msg = ''             # 详情页操作结果提示
     detail_sampler = None       # 详情页状态/日志后台采样器
     action_state = {'pending': False, 'done': False, 'msg': ''}  # 控制操作线程结果
+    update_state = {'running': False, 'lines': [], 'done': False, 'success': False, 'restarting': False}
     music_cursor = 0
     music_scroll = 0
     music_playing_index = -1
@@ -130,6 +132,39 @@ def main():
         action_state['pending'] = False
         action_state['done'] = True
         print(f"[服务] {name} 自启切换: {'成功' if ok else '失败'} {m}")
+
+    def do_update():
+        """后台线程：git pull → 重启服务"""
+        nonlocal update_state
+        import subprocess as _sp
+        update_state['running'] = True
+        update_state['lines'] = ['正在拉取更新...']
+        try:
+            r = _sp.run(['git', 'pull'], capture_output=True, text=True, timeout=30, cwd=os.path.dirname(os.path.abspath(__file__)))
+            out = (r.stdout or '').strip()
+            err = (r.stderr or '').strip()
+            if out:
+                update_state['lines'].append(out)
+            if err:
+                update_state['lines'].append(err)
+            if r.returncode == 0:
+                update_state['lines'].append('拉取完成 ✓')
+                update_state['success'] = True
+            else:
+                update_state['lines'].append(f'拉取失败: {err or out}')
+                update_state['success'] = False
+        except Exception as e:
+            update_state['lines'].append(f'错误: {str(e)[:40]}')
+            update_state['success'] = False
+        if update_state['success']:
+            update_state['lines'].append('正在重启服务...')
+            update_state['restarting'] = True
+            try:
+                _sp.run(['sudo', 'systemctl', 'restart', 'st7789-screen.service'], timeout=10)
+            except Exception:
+                pass
+        update_state['done'] = True
+        update_state['running'] = False
 
     try:
         while True:
@@ -228,10 +263,31 @@ def main():
                 elif view == 'camera':
                     frame = camera_sampler.get() if camera_sampler else None
                     draw_camera(disp, frame)
+                elif view == 'update':
+                    W, H = disp.width, disp.height
+                    disp.fill_screen(0)
+                    disp.fill_round_rect(6, 6, W - 12, 28, 6, 0x3186)
+                    disp.draw_text_pil(16, 11, "系统更新", 0xFFFF, size=16)
+                    y = 50
+                    lines = update_state.get('lines', [])
+                    for i, ln in enumerate(lines):
+                        if y > H - 30:
+                            break
+                        clr = 0xFFFF if '失败' not in ln else 0xF800
+                        disp.draw_text_pil(12, y, ln[:36], clr, size=12)
+                        y += 18
+                    if update_state['running'] and not update_state['done']:
+                        dots = '.' * (int(time.monotonic() * 4) % 4)
+                        disp.draw_text_pil(12, y, f"执行中{dots}", 0x8410, size=12)
+                    elif update_state['done']:
+                        disp.draw_text_pil(12, y + 4, "按 Esc 返回", 0x8410, size=12)
+                    disp.flush()
                 need_render = False
 
-            # 摄像头页需要高频刷新（~5fps，随主循环每次重绘）
+            # 摄像头页 / 更新页需要高频刷新
             if view == 'camera':
+                need_render = True
+            if view == 'update' and update_state['running']:
                 need_render = True
 
             # 细粒度轮询按键，使切换即时响应
@@ -261,6 +317,16 @@ def main():
                     target = MENU_ITEMS[menu_cursor]['page']
                     if target == 'shutdown':
                         shutdown_confirm = True
+                        need_render = True
+                        continue
+                    if target == 'update':
+                        view = 'update'
+                        update_state['lines'] = ['正在更新...']
+                        update_state['done'] = False
+                        update_state['running'] = True
+                        update_state['success'] = False
+                        update_state['restarting'] = False
+                        threading.Thread(target=do_update, daemon=True).start()
                         need_render = True
                         continue
                     if target:
