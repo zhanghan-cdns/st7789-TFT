@@ -12,7 +12,8 @@ from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
     draw_menu, draw_music, draw_now_playing, draw_camera,
-    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN, get_actions,
+    move_cursor, MENU_ITEMS, lunar_date_str, lunar_yi_yi_str,
+    get_actions, CPU_HISTORY_LEN,
 )
 from ui.services import ROWS_PER_PAGE as SVC_ROWS
 from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
@@ -197,6 +198,7 @@ def main():
                                time.strftime('%Y-%m-%d', lt),
                                WEEKDAYS[lt.tm_wday],
                                lunar_date_str(lt.tm_year, lt.tm_mon, lt.tm_mday),
+                               lunar_yi_yi_str(lt.tm_year, lt.tm_mon, lt.tm_mday),
                                theme=clock_theme)
                 elif view == 'services':
                     draw_services(disp, services_data, services_cursor, services_scroll)

@@ -142,3 +142,42 @@ def lunar_date_str(y, m, d):
     """公历日期 → 农历显示串，如 "丙午马年 正月初一" """
     ly, lm, ld, is_leap = solar_to_lunar(y, m, d)
     return f"{_gan_zhi(ly)}{_zodiac(ly)}年 {_month_name(lm, is_leap)}{_day_name(ld)}"
+
+
+# ── 日干支（用于黄历宜忌）──
+
+def _day_gan_zhi(offset):
+    """根据 offset（公历 2000-01-07 → offset=0）返回 (天干, 地支) 索引"""
+    return offset % 10, offset % 12
+
+
+def _day_gan_zhi_str(y, m, d):
+    """公历日期 → 日干支字符串，如 "甲子" """
+    offset = (date(y, m, d) - date(2000, 1, 7)).days
+    g, z = _day_gan_zhi(offset)
+    return _GAN[g] + _ZHI[z]
+
+
+# 十二日支宜忌（简化版，取最常见宜忌各一项）
+_RIZHI_YI = {
+    0: ('祭祀', '开光'),      # 子
+    1: ('结婚', '出行'),      # 丑
+    2: ('祭祀', '理发'),      # 寅
+    3: ('结婚', '动土'),      # 卯
+    4: ('祭祀', '出行'),      # 辰
+    5: ('结婚', '开光'),      # 巳
+    6: ('祭祀', '理发'),      # 午
+    7: ('结婚', '动土'),      # 未
+    8: ('祭祀', '出行'),      # 申
+    9: ('结婚', '开光'),      # 酉
+    10: ('祭祀', '理发'),     # 戌
+    11: ('结婚', '动土'),     # 亥
+}
+
+
+def lunar_yi_yi_str(y, m, d):
+    """公历日期 → "宜XXX 忌XXX" 字符串"""
+    offset = (date(y, m, d) - date(2000, 1, 7)).days
+    _, z = _day_gan_zhi(offset)
+    yi, ji = _RIZHI_YI[z]
+    return f"宜{yi} 忌{ji}"

@@ -243,11 +243,12 @@ def _compose(disp, x, old_ch, new_ch, t, th, alpha=255):
               int(SHADOW_MAX * (1 - p)))
 
 
-def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
+def draw_clock(disp, time_str, date_str, week_str, lunar_str, yi_yi_str='', theme='dark'):
     """绘制翻页时钟页
 
     参数：
       time_str — "HH:MM:SS"；date_str/week_str/lunar_str — 日期/星期/农历
+      yi_yi_str — 宜忌文字如 "宜祭祀 忌开光"
       theme    — 'dark' 或 'light'
     """
     W, H = disp.width, disp.height
@@ -280,7 +281,9 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, theme='dark'):
     y = CARD_Y + CH + 12
     disp.draw_text_pil((W - dw) // 2, y, date_line, th['date'], size=18)
     y += dh + 10
-    disp.draw_text_pil((W - lw) // 2, y, lunar_str, th['lunar'], size=20)
+    full_lunar = f"{lunar_str}  {yi_yi_str}" if yi_yi_str else lunar_str
+    lw, _ = disp.text_size_pil(full_lunar, 16)
+    disp.draw_text_pil((W - lw) // 2, y, full_lunar, th['lunar'], size=16)
     hint = "Enter: theme   \u2190 \u2192 back"
     hw, _ = disp.text_size_pil(hint, 10)
     disp.draw_text_pil((W - hw) // 2, H - 14, hint, th['hint'], size=10)
