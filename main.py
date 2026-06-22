@@ -239,6 +239,19 @@ def main():
             if key is None:
                 continue
 
+            # ---------- 关机确认（优先于菜单，让 Esc 能取消） ----------
+            if shutdown_confirm:
+                if key == 'enter':
+                    print("[菜单] 关机...")
+                    import subprocess
+                    subprocess.run(['sudo', 'poweroff'], timeout=5)
+                    break
+                elif key in ('back', 'quit'):
+                    shutdown_confirm = False
+                    need_render = True
+                    continue
+                continue
+
             # ---------- 菜单页 ----------
             if view == 'menu':
                 if key in ('up', 'down', 'left', 'right'):
@@ -263,19 +276,6 @@ def main():
                             camera_sampler.start()
                 elif key == 'quit':
                     break
-                continue
-
-            # ---------- 关机确认 ----------
-            if shutdown_confirm:
-                if key == 'enter':
-                    print("[菜单] 关机...")
-                    import subprocess
-                    subprocess.run(['sudo', 'poweroff'], timeout=5)
-                    break
-                elif key in ('back', 'quit'):
-                    shutdown_confirm = False
-                    need_render = True
-                    continue
                 continue
 
             # ---------- 子页通用：Esc 返回（详情→列表，播放→列表，其余→菜单），q 退出 ----------
