@@ -62,6 +62,7 @@ def main():
     # 视图状态：'menu' 首页 / 'dashboard' / 'clock' / 'services' / 'music'
     view = 'clock'
     menu_cursor = 0
+    shutdown_confirm = False
     clock_theme = 'dark'        # 翻页时钟主题：'dark' / 'light'
     services_cursor = 0
     services_scroll = 0
@@ -186,6 +187,15 @@ def main():
             if need_render:
                 if view == 'menu':
                     draw_menu(disp, MENU_ITEMS, menu_cursor)
+                    if shutdown_confirm:
+                        W, H = disp.width, disp.height
+                        bw, bh = 200, 80
+                        bx, by = (W - bw) // 2, (H - bh) // 2
+                        disp.fill_round_rect(bx, by, bw, bh, 8, 0x0841)
+                        disp.fill_round_rect(bx + 2, by + 2, bw - 4, bh - 4, 7, 0x2104)
+                        disp.draw_text_pil(W // 2 - 36, by + 12, "确认关机?", 0xFFFF, size=18)
+                        disp.draw_text_pil(W // 2 - 50, by + 45, "Enter确认  Esc取消", 0x8410, size=12)
+                        disp.flush()
                 elif view == 'dashboard':
                     draw_dashboard(disp, cpu, cpu_history, cpu_temp, fan_val, fan_unit,
                                    mem_used, mem_total, mem_pct,
@@ -237,10 +247,9 @@ def main():
                 elif key == 'enter':
                     target = MENU_ITEMS[menu_cursor]['page']
                     if target == 'shutdown':
-                        print("[菜单] 关机...")
-                        import subprocess
-                        subprocess.run(['sudo', 'poweroff'], timeout=5)
-                        break
+                        shutdown_confirm = True
+                        need_render = True
+                        continue
                     if target:
                         view = target
                         need_render = True
@@ -254,6 +263,19 @@ def main():
                             camera_sampler.start()
                 elif key == 'quit':
                     break
+                continue
+
+            # ---------- 关机确认 ----------
+            if shutdown_confirm:
+                if key == 'enter':
+                    print("[菜单] 关机...")
+                    import subprocess
+                    subprocess.run(['sudo', 'poweroff'], timeout=5)
+                    break
+                elif key in ('back', 'quit'):
+                    shutdown_confirm = False
+                    need_render = True
+                    continue
                 continue
 
             # ---------- 子页通用：Esc 返回（详情→列表，播放→列表，其余→菜单），q 退出 ----------
