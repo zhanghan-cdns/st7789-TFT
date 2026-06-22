@@ -4,10 +4,12 @@
 不读取任何系统信息（数据由 main 采集后传入）。
 布局：顶栏 + CPU折线图 + 内存进度条 + 底部 NET/温度/风扇 3 列卡片。
 """
+import os
 from color import (
     BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD, TRACK,
     CPU_CLR, MEM_CLR,
 )
+from .svg_raster import rasterize_svg
 
 # CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
 CPU_HISTORY_LEN = 60
@@ -57,24 +59,34 @@ def draw_bar(disp, x, y, w, h, pct, color):
         disp.fill_round_rect(x, y, max(fw, h), h, r, color)
 
 
+_WIFI_CACHE = {}
+
 def draw_wifi_icon(disp, x, y, quality, color=WHITE):
-    """绘制 16x14 WiFi 信号图标（弧形，类似手机 WiFi 图标）
+    """绘制 WiFi 信号图标（SVG 栅格化，着色绘制）
 
     quality（0~100）决定了点亮几格：
     75+ → 4 格，50+ → 3 格，25+ → 2 格，1+ → 1 格。
-    未达阈值的使用 DGRAY 暗灰显示。底部圆点始终点亮。
+    未达阈值的使用 DGRAY 暗灰显示。
     """
-    cx, cb = x + 8, y + 12  # 圆心 x，底部 y
-    off = DGRAY
-    # 从外到内画弧：画实心圆→挖空内圈→裁掉下半，用背景色 0 裁剪
-    for r, th in [(12, 75), (9, 50), (6, 25), (3, 1)]:
-        clr = color if quality >= th else off
-        disp.fill_circle(cx, cb, r, clr)
-        if r > 2:
-            disp.fill_circle(cx, cb, r - 2, 0)
-        disp.fill_rect(cx - r, cb, r * 2, r + 1, 0)
-    # 底部圆点（不会被裁掉，因为圆点中心在 cb 之上时上半可见）
-    disp.fill_circle(cx, cb - 1, 2, color)
+    sz = 16
+    key = sz
+    if key not in _WIFI_CACHE:
+        path = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                            'assets', 'wifi.svg')
+        try:
+            mask = rasterize_svg(path, sz)
+            _WIFI_CACHE[key] = mask
+        except Exception:
+            _WIFI_CACHE[key] = None
+    mask = _WIFI_CACHE[key]
+    if mask is None:
+        return
+    # 信号强度决定颜色：全强度 / 暗色 / 灰色
+    if quality >= 50:
+        clr = color
+    else:
+        clr = DGRAY
+    disp.blit_mask(x, y, mask, clr)
 
 
 def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit="", dot_color=None):
