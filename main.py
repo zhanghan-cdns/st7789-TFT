@@ -143,7 +143,8 @@ def main():
         try:
             _sp.run(['git', 'config', '--global', '--add', 'safe.directory', cwd],
                     capture_output=True, text=True, timeout=10)
-            env = {**os.environ, 'GIT_SSH_COMMAND': 'ssh -o StrictHostKeyChecking=no'}
+            home = '/home/cat'
+            env = {**os.environ, 'HOME': home, 'GIT_SSH_COMMAND': f'ssh -o StrictHostKeyChecking=no -i {home}/.ssh/id_rsa'}
             r = _sp.run(['git', 'pull'], capture_output=True, text=True, timeout=30, cwd=cwd, env=env)
             out = (r.stdout or '').strip()
             err = (r.stderr or '').strip()
