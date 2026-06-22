@@ -61,10 +61,10 @@ def draw_services(disp, services, cursor=0, scroll=0):
     # 列头（背景条 + 分隔线）
     hh = 24
     disp.fill_rect(6, 36, W - 12, hh, 0x2108)
-    disp.draw_text_pil(28, 36 + (hh - 12) // 2, "服务名称", WHITE, size=12)
+    disp.draw_text_pil(28, 36 + (hh - 16) // 2, "服务名称", WHITE, size=16)
     en_header = "自启"
-    en_w = disp.text_width_pil(en_header, 12)
-    disp.draw_text_pil(W - 14 - en_w, 36 + (hh - 12) // 2, en_header, WHITE, size=12)
+    en_w = disp.text_width_pil(en_header, 16)
+    disp.draw_text_pil(W - 14 - en_w, 36 + (hh - 16) // 2, en_header, WHITE, size=16)
     disp.fill_rect(6, 36 + hh, W - 12, 1, 0x3186)
 
     start = scroll
@@ -86,12 +86,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
         disp.fill_circle(16, y + ROW_HEIGHT // 2, 5, dot_color)
 
         name_clr = WHITE if i != cursor else CYAN
-        disp.draw_text_pil(28, y + 10, display_name, name_clr, size=12)
+        disp.draw_text_pil(28, y + 8, display_name, name_clr, size=16)
 
         en_label = _enabled_label(enabled)
         en_color = _enabled_color(enabled)
-        en_w = disp.text_width_pil(en_label, 12)
-        disp.draw_text_pil(W - 14 - en_w, y + 10, en_label, en_color, size=12)
+        en_w = disp.text_width_pil(en_label, 16)
+        disp.draw_text_pil(W - 14 - en_w, y + 8, en_label, en_color, size=16)
 
         y += ROW_HEIGHT
 
