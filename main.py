@@ -143,7 +143,7 @@ def main():
         try:
             _sp.run(['git', 'config', '--global', '--add', 'safe.directory', cwd],
                     capture_output=True, text=True, timeout=10)
-            r = _sp.run(['git', 'pull', 'https://github.com/zhanghan-cdns/st7789-TFT.git'],
+            r = _sp.run(['git', 'pull', 'https://github.com/zhanghan-cdns/st7789-TFT.git', 'main'],
                         capture_output=True, text=True, timeout=120, cwd=cwd)
             out = (r.stdout or '').strip()
             err = (r.stderr or '').strip()
