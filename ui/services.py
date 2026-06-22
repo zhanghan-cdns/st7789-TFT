@@ -83,12 +83,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
         disp.fill_circle(16, y + ROW_HEIGHT // 2, 5, dot_color)
 
         name_clr = WHITE if i != cursor else CYAN
-        disp.draw_text_pil(28, y + 4, display_name, name_clr, size=16)
+        disp.draw_text_pil(28, y + 8, display_name, name_clr, size=16)
 
         en_label = _enabled_label(enabled)
         en_color = _enabled_color(enabled)
         en_w = disp.text_width_pil(en_label, 16)
-        disp.draw_text_pil(W - 14 - en_w, y + 4, en_label, en_color, size=16)
+        disp.draw_text_pil(W - 14 - en_w, y + 8, en_label, en_color, size=16)
 
         y += ROW_HEIGHT
 
