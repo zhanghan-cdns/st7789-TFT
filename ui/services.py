@@ -8,8 +8,12 @@ from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, 
 ROWS_PER_PAGE = 7
 ROW_HEIGHT = 24
 
-# 详情页操作按钮：(systemctl 动作, 显示文字)
-ACTIONS = [('start', '启动'), ('stop', '停止'), ('restart', '重启')]
+# 详情页操作按钮：(systemctl 动作, 显示文字)，运行时隐藏"启动"
+def get_actions(active):
+    """根据服务 active 状态返回可用操作按钮列表"""
+    if active == 'active':
+        return [('stop', '停止'), ('restart', '重启')]
+    return [('start', '启动'), ('restart', '重启')]
 
 
 def _active_color(sub):
@@ -144,15 +148,29 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, desc[:40], DGRAY, size=11)
     y += 18
 
-    # 操作按钮
+    # 操作按钮（根据运行状态动态过滤）
+    actions = get_actions(detail.get('active', ''))
     bw, bh, gap = 92, 26, 8
-    for i, (_, label) in enumerate(ACTIONS):
+    for i, (_, label) in enumerate(actions):
         x = 12 + i * (bw + gap)
         sel = (i == action_cursor and focus == 'action')
         disp.fill_round_rect(x, y, bw, bh, 6, GREEN if sel else CARD)
         tw = disp.text_width_pil(label, 13)
         disp.draw_text_pil(x + (bw - tw) // 2, y + 6, label,
                            BLACK if sel else WHITE, size=13)
+    y += bh + 6
+
+    # 自启开关按钮
+    en = detail.get('enabled', '')
+    en_label = '自启:开' if en == 'enabled' else '自启:关'
+    sel_auto = (focus == 'autostart')
+    auto_color = GREEN if en == 'enabled' else RED
+    bw2 = 92
+    x_auto = 12
+    disp.fill_round_rect(x_auto, y, bw2, bh, 6, auto_color if sel_auto else CARD)
+    tw2 = disp.text_width_pil(en_label, 13)
+    disp.draw_text_pil(x_auto + (bw2 - tw2) // 2, y + 6, en_label,
+                       BLACK if sel_auto else auto_color, size=13)
     y += bh + 6
 
     if msg:
@@ -172,7 +190,8 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
 
-    hint = ("←→按钮 ↓日志区 Enter执行" if focus == 'action'
+    hint = ("←→切换按钮 ↓自启开关 ↓日志区 Enter执行" if focus == 'action'
+            else "Enter切换自启 ↑按钮区 ↓日志区" if focus == 'autostart'
             else "↑↓滚动 ←→按钮区 Esc返回")
     disp.draw_text_pil(6, H - 12, hint, DGRAY, size=10)
     disp.flush()

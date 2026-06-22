@@ -117,6 +117,32 @@ def get_service_status(name, log_lines=8):
     return info
 
 
+def toggle_autostart(name):
+    """切换服务的开机自启状态。返回 (成功?, 提示文本)"""
+    try:
+        r = subprocess.run(
+            ['systemctl', 'show', name, '--property=UnitFileState', '--no-pager'],
+            capture_output=True, text=True, timeout=10)
+        current = r.stdout.strip().split('=', 1)[-1].strip()
+    except Exception as e:
+        return False, str(e)[:40]
+    if current in ('static', 'indirect', 'generated', 'alias'):
+        return False, f'当前="{current}"，不支持切换'
+    action = 'disable' if current == 'enabled' else 'enable'
+    label = '启用' if action == 'enable' else '禁用'
+    try:
+        r = subprocess.run(['systemctl', action, name],
+                           capture_output=True, text=True, timeout=30)
+        if r.returncode == 0:
+            return True, f'已{label}自启'
+        msg = (r.stderr or r.stdout).strip().split('\n')[0][:40]
+        return False, msg or '操作失败'
+    except subprocess.TimeoutExpired:
+        return False, '操作超时'
+    except Exception as e:
+        return False, str(e)[:40]
+
+
 def control_service(name, action):
     """对服务执行 start/stop/restart，返回 (成功?, 提示文本)。需 root 权限。"""
     if action not in ('start', 'stop', 'restart'):

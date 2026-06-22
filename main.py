@@ -12,15 +12,15 @@ from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
     draw_menu, draw_music, draw_now_playing, draw_camera,
-    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN,
+    move_cursor, MENU_ITEMS, lunar_date_str, CPU_HISTORY_LEN, get_actions,
 )
-from ui.services import ROWS_PER_PAGE as SVC_ROWS, ACTIONS as SVC_ACTIONS
+from ui.services import ROWS_PER_PAGE as SVC_ROWS
 from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
 from service import (
     KeyReader, BackgroundSampler,
     get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory,
     get_wifi_info, get_ip_address, get_services,
-    get_service_status, control_service,
+    get_service_status, control_service, toggle_autostart,
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
     CameraStream,
@@ -120,6 +120,14 @@ def main():
         action_state['pending'] = False
         action_state['done'] = True
         print(f"[服务] {name} {act}: {'成功' if ok else '失败'} {m}")
+
+    def _do_toggle_autostart(name):
+        """后台线程切换自启状态"""
+        ok, m = toggle_autostart(name)
+        action_state['msg'] = m
+        action_state['pending'] = False
+        action_state['done'] = True
+        print(f"[服务] {name} 自启切换: {'成功' if ok else '失败'} {m}")
 
     try:
         while True:
@@ -310,12 +318,32 @@ def main():
 
             # ---------- 系统服务详情页 ----------
             elif view == 'service_detail':
+                detail = detail_sampler.get() if detail_sampler else None
+                detail_active = detail.get('active', '') if detail else ''
+                svc_actions = get_actions(detail_active)
+                n_actions = len(svc_actions)
                 if detail_focus == 'action':
                     if key in ('left', 'up'):
-                        detail_action = (detail_action - 1) % len(SVC_ACTIONS)
+                        detail_action = (detail_action - 1) % n_actions
                         need_render = True
                     elif key == 'right':
-                        detail_action = (detail_action + 1) % len(SVC_ACTIONS)
+                        detail_action = (detail_action + 1) % n_actions
+                        need_render = True
+                    elif key == 'down':
+                        detail_focus = 'autostart'
+                        need_render = True
+                    elif key == 'enter' and not action_state['pending']:
+                        action_state['pending'] = True
+                        action_state['done'] = False
+                        detail_msg = '执行中...'
+                        act = svc_actions[detail_action][0]
+                        threading.Thread(target=run_action,
+                                         args=(detail_name, act),
+                                         daemon=True).start()
+                        need_render = True
+                elif detail_focus == 'autostart':
+                    if key in ('up',):
+                        detail_focus = 'action'
                         need_render = True
                     elif key == 'down':
                         detail_focus = 'log'
@@ -325,9 +353,8 @@ def main():
                         action_state['pending'] = True
                         action_state['done'] = False
                         detail_msg = '执行中...'
-                        act = SVC_ACTIONS[detail_action][0]
-                        threading.Thread(target=run_action,
-                                         args=(detail_name, act),
+                        threading.Thread(target=lambda:
+                            _do_toggle_autostart(detail_name),
                                          daemon=True).start()
                         need_render = True
                 elif detail_focus == 'log':
