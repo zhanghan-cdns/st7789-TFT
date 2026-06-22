@@ -59,12 +59,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
     disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 15, info, WHITE, size=10)
 
     # 列头（背景条 + 分隔线）
-    disp.fill_rect(6, 36, W - 12, ROW_HEIGHT, 0x1082)
-    disp.draw_text_pil(28, 40, "服务名称", 0x8410, size=12)
+    disp.fill_rect(6, 36, W - 12, ROW_HEIGHT, 0x2108)
+    disp.draw_text_pil(28, 46, "服务名称", 0x8410, size=12)
     en_header = "自启"
     en_w = disp.text_width_pil(en_header, 12)
-    disp.draw_text_pil(W - 14 - en_w, 40, en_header, 0x8410, size=12)
-    disp.fill_rect(6, 36 + ROW_HEIGHT, W - 12, 1, 0x2108)
+    disp.draw_text_pil(W - 14 - en_w, 46, en_header, 0x8410, size=12)
+    disp.fill_rect(6, 36 + ROW_HEIGHT, W - 12, 1, 0x3186)
 
     start = scroll
     end = min(start + ROWS_PER_PAGE, total)
