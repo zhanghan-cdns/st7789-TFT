@@ -58,23 +58,23 @@ def draw_bar(disp, x, y, w, h, pct, color):
 
 
 def draw_wifi_icon(disp, x, y, quality, color=WHITE):
-    """绘制 16x14 WiFi 信号图标
+    """绘制 16x14 WiFi 信号图标（弧形，类似手机 WiFi 图标）
 
-    quality（0~100）决定了点亮几格信号条：
+    quality（0~100）决定了点亮几格：
     75+ → 4 格，50+ → 3 格，25+ → 2 格，1+ → 1 格。
-    未达阈值的使用 DGRAY 暗灰显示。
-    底部圆点始终点亮。
+    未达阈值的使用 DGRAY 暗灰显示。底部圆点始终点亮。
     """
+    cx, cb = x + 8, y + 12  # 圆心 x，底部 y
     off = DGRAY
-    c = color if quality >= 75 else off
-    disp.fill_rect(x, y, 16, 2, c)
-    c = color if quality >= 50 else off
-    disp.fill_rect(x+2, y+3, 12, 2, c)
-    c = color if quality >= 25 else off
-    disp.fill_rect(x+4, y+6, 8, 2, c)
-    c = color if quality >= 1 else off
-    disp.fill_rect(x+6, y+9, 4, 2, c)
-    disp.fill_rect(x+7, y+12, 2, 2, color)
+    # 从外到内画弧：画实心圆→挖空内圈→裁掉下半，用背景色 0 裁剪
+    for r, th in [(12, 75), (9, 50), (6, 25), (3, 1)]:
+        clr = color if quality >= th else off
+        disp.fill_circle(cx, cb, r, clr)
+        if r > 2:
+            disp.fill_circle(cx, cb, r - 2, 0)
+        disp.fill_rect(cx - r, cb, r * 2, r + 1, 0)
+    # 底部圆点（不会被裁掉，因为圆点中心在 cb 之上时上半可见）
+    disp.fill_circle(cx, cb - 1, 2, color)
 
 
 def _metric_card(disp, x, y, w, h, label, value, color, pct=None, note="", unit="", dot_color=None):
