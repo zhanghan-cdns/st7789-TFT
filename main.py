@@ -143,8 +143,8 @@ def main():
         try:
             _sp.run(['git', 'config', '--global', '--add', 'safe.directory', cwd],
                     capture_output=True, text=True, timeout=10)
-            env = {**os.environ, 'HOME': '/home/cat', 'GIT_SSH_COMMAND': 'ssh -o StrictHostKeyChecking=no'}
-            r = _sp.run(['git', 'pull'], capture_output=True, text=True, timeout=30, cwd=cwd, env=env)
+            r = _sp.run(['git', 'pull', 'https://github.com/zhanghan-cdns/st7789-TFT.git'],
+                        capture_output=True, text=True, timeout=30, cwd=cwd)
             out = (r.stdout or '').strip()
             err = (r.stderr or '').strip()
             if out:
