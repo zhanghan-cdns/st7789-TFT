@@ -148,29 +148,25 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, desc[:40], DGRAY, size=11)
     y += 18
 
-    # 操作按钮（根据运行状态动态过滤）
+    # 操作按钮 + 自启开关（同一行）
     actions = get_actions(detail.get('active', ''))
-    bw, bh, gap = 92, 26, 8
-    for i, (_, label) in enumerate(actions):
-        x = 12 + i * (bw + gap)
-        sel = (i == action_cursor and focus == 'action')
-        disp.fill_round_rect(x, y, bw, bh, 6, GREEN if sel else CARD)
-        tw = disp.text_width_pil(label, 13)
-        disp.draw_text_pil(x + (bw - tw) // 2, y + 6, label,
-                           BLACK if sel else WHITE, size=13)
-    y += bh + 6
-
-    # 自启开关按钮
     en = detail.get('enabled', '')
-    en_label = '自启:开' if en == 'enabled' else '自启:关'
-    sel_auto = (focus == 'autostart')
-    auto_color = GREEN if en == 'enabled' else RED
-    bw2 = 92
-    x_auto = 12
-    disp.fill_round_rect(x_auto, y, bw2, bh, 6, auto_color if sel_auto else CARD)
-    tw2 = disp.text_width_pil(en_label, 13)
-    disp.draw_text_pil(x_auto + (bw2 - tw2) // 2, y + 6, en_label,
-                       BLACK if sel_auto else auto_color, size=13)
+    all_btns = actions + [('autostart', '自启:开' if en == 'enabled' else '自启:关')]
+    bw, bh, gap = 70, 26, 6
+    for i, (act, label) in enumerate(all_btns):
+        x = 12 + i * (bw + gap)
+        if act == 'autostart':
+            sel = (focus == 'autostart')
+            clr = GREEN if en == 'enabled' else RED
+        else:
+            sel = (i == action_cursor and focus == 'action')
+            clr = GREEN if sel else CARD
+        bg = clr if sel else CARD
+        txt_clr = BLACK if sel else (clr if act == 'autostart' else WHITE)
+        disp.fill_round_rect(x, y, bw, bh, 6, bg)
+        tw = disp.text_width_pil(label, 12)
+        disp.draw_text_pil(x + (bw - tw) // 2, y + 6, label,
+                           txt_clr, size=12)
     y += bh + 6
 
     if msg:
@@ -190,8 +186,8 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
 
-    hint = ("←→切换按钮 ↓自启开关 ↓日志区 Enter执行" if focus == 'action'
-            else "Enter切换自启 ↑按钮区 ↓日志区" if focus == 'autostart'
-            else "↑↓滚动 ←→按钮区 Esc返回")
+    hint = ("←→切换操作 ↓自启 ↓日志 Enter执行" if focus == 'action'
+            else "Enter切换自启 ↑操作 ↓日志" if focus == 'autostart'
+            else "↑↓滚动 ←→操作 Esc返回")
     disp.draw_text_pil(6, H - 12, hint, DGRAY, size=10)
     disp.flush()
