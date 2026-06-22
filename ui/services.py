@@ -5,8 +5,8 @@
 """
 from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD
 
-ROWS_PER_PAGE = 7
-ROW_HEIGHT = 24
+ROWS_PER_PAGE = 6
+ROW_HEIGHT = 28
 
 # 详情页操作按钮：(systemctl 动作, 显示文字)，运行时隐藏"启动"
 def get_actions(active):
@@ -73,8 +73,8 @@ def draw_services(disp, services, cursor=0, scroll=0):
         display_name = name
         if display_name.endswith('.service'):
             display_name = display_name[:-8]
-        if len(display_name) > 24:
-            display_name = display_name[:22] + '..'
+        if len(display_name) > 18:
+            display_name = display_name[:16] + '..'
 
         if i == cursor:
             disp.fill_rect(6, y, W - 12, ROW_HEIGHT, 0x3186)
@@ -83,12 +83,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
         disp.fill_circle(16, y + ROW_HEIGHT // 2, 5, dot_color)
 
         name_clr = WHITE if i != cursor else CYAN
-        disp.draw_text_pil(28, y + 6, display_name, name_clr, size=12)
+        disp.draw_text_pil(28, y + 5, display_name, name_clr, size=14)
 
         en_label = _enabled_label(enabled)
         en_color = _enabled_color(enabled)
-        en_w = disp.text_width_pil(en_label, 12)
-        disp.draw_text_pil(W - 14 - en_w, y + 6, en_label, en_color, size=12)
+        en_w = disp.text_width_pil(en_label, 14)
+        disp.draw_text_pil(W - 14 - en_w, y + 5, en_label, en_color, size=14)
 
         y += ROW_HEIGHT
 
