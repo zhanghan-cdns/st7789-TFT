@@ -149,8 +149,6 @@ def main():
             err = (r.stderr or '').strip()
             if out:
                 update_state['lines'].append(out)
-            if err:
-                update_state['lines'].append(err)
             if r.returncode == 0:
                 update_state['lines'].append('拉取完成 ✓')
                 update_state['success'] = True
@@ -158,7 +156,7 @@ def main():
                 update_state['lines'].append(f'拉取失败: {err or out}')
                 update_state['success'] = False
         except Exception as e:
-            update_state['lines'].append(f'错误: {str(e)[:40]}')
+            update_state['lines'].append(f'错误: {str(e)}')
             update_state['success'] = False
         if update_state['success']:
             update_state['lines'].append('正在重启服务...')
@@ -281,7 +279,7 @@ def main():
                             if y > H - 30:
                                 break
                             clr = 0xFFFF if '失败' not in sub else 0xF800
-                            disp.draw_text_pil(12, y, sub[:50], clr, size=12)
+                            disp.draw_text_pil(12, y, sub[:60], clr, size=12)
                             y += 18
                     if update_state['running'] and not update_state['done']:
                         dots = '.' * (int(time.monotonic() * 4) % 4)
