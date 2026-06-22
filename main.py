@@ -147,18 +147,20 @@ def main():
                         capture_output=True, text=True, timeout=30, cwd=cwd)
             out = (r.stdout or '').strip()
             err = (r.stderr or '').strip()
-            if out:
-                update_state['lines'].append(out)
+            for ln in out.split('\n'):
+                update_state['lines'].append(ln)
             if r.returncode == 0:
                 update_state['lines'].append('拉取完成 ✓')
                 update_state['success'] = True
             else:
-                update_state['lines'].append(f'拉取失败: {err or out}')
+                for ln in err.split('\n'):
+                    update_state['lines'].append(ln)
+                update_state['lines'].append(f'拉取失败 (code={r.returncode})')
                 update_state['success'] = False
         except Exception as e:
             update_state['lines'].append(f'错误: {str(e)}')
             if hasattr(e, 'stderr') and e.stderr:
-                update_state['lines'].append(str(e.stderr))
+                update_state['lines'].append(str(e.stderr)[:60])
             update_state['success'] = False
         if update_state['success']:
             update_state['lines'].append('正在重启服务...')
