@@ -274,12 +274,15 @@ def main():
                     disp.draw_text_pil(16, 11, "系统更新", 0xFFFF, size=16)
                     y = 50
                     lines = update_state.get('lines', [])
-                    for i, ln in enumerate(lines):
+                    for ln in lines:
                         if y > H - 30:
                             break
-                        clr = 0xFFFF if '失败' not in ln else 0xF800
-                        disp.draw_text_pil(12, y, ln[:36], clr, size=12)
-                        y += 18
+                        for sub in ln.split('\n'):
+                            if y > H - 30:
+                                break
+                            clr = 0xFFFF if '失败' not in sub else 0xF800
+                            disp.draw_text_pil(12, y, sub[:50], clr, size=12)
+                            y += 18
                     if update_state['running'] and not update_state['done']:
                         dots = '.' * (int(time.monotonic() * 4) % 4)
                         disp.draw_text_pil(12, y, f"执行中{dots}", 0x8410, size=12)
