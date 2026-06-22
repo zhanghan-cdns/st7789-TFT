@@ -151,15 +151,16 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
     # 操作按钮 + 自启开关（同一行）
     actions = get_actions(detail.get('active', ''))
     en = detail.get('enabled', '')
+    n_act = len(actions)
     all_btns = actions + [('autostart', '自启:开' if en == 'enabled' else '自启:关')]
     bw, bh, gap = 70, 26, 6
     for i, (act, label) in enumerate(all_btns):
         x = 12 + i * (bw + gap)
         if act == 'autostart':
-            sel = (focus == 'autostart')
+            sel = (action_cursor >= n_act)
             clr = GREEN if en == 'enabled' else RED
         else:
-            sel = (i == action_cursor and focus == 'action')
+            sel = (i == action_cursor and action_cursor < n_act)
             clr = GREEN if sel else CARD
         bg = clr if sel else CARD
         txt_clr = BLACK if sel else (clr if act == 'autostart' else WHITE)
@@ -186,8 +187,8 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
 
-    hint = ("←→切换操作 ↓自启 ↓日志 Enter执行" if focus == 'action'
-            else "Enter切换自启 ↑操作 ↓日志" if focus == 'autostart'
-            else "↑↓滚动 ←→操作 Esc返回")
+    hint = ("←→切换  ↓日志  Enter执行" if focus == 'action'
+            else "←→切换  ↓日志  Enter切换自启" if focus == 'autostart'
+            else "↑↓滚动  ←→操作  Esc返回")
     disp.draw_text_pil(6, H - 12, hint, DGRAY, size=10)
     disp.flush()
