@@ -18,7 +18,7 @@ MENU_ITEMS = [
     {'label': '系统服务', 'color': GREEN, 'page': 'services'},
     {'label': '音乐播放', 'color': MAGENTA, 'page': 'music'},
     {'label': '摄像头', 'color': BLUE, 'page': 'camera'},
-    {'label': '预留', 'color': DGRAY, 'page': None},
+    {'label': '关机', 'color': ORANGE, 'page': 'shutdown'},
     {'label': '预留', 'color': DGRAY, 'page': None},
     {'label': '预留', 'color': DGRAY, 'page': None},
     {'label': '预留', 'color': DGRAY, 'page': None},

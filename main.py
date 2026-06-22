@@ -226,6 +226,11 @@ def main():
                     need_render = True
                 elif key == 'enter':
                     target = MENU_ITEMS[menu_cursor]['page']
+                    if target == 'shutdown':
+                        print("[菜单] 关机...")
+                        import subprocess
+                        subprocess.run(['sudo', 'poweroff'], timeout=5)
+                        break
                     if target:
                         view = target
                         need_render = True
