@@ -17,6 +17,7 @@ _ICON_FILES = {
     'services': 'systemd.svg',
     'music': 'music.svg',
     'camera': 'camera.svg',
+    'shutdown': 'poweroff.svg',
 }
 
 _cache = {}
