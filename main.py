@@ -323,40 +323,14 @@ def main():
                 svc_actions = get_actions(detail_active)
                 n_actions = len(svc_actions)
                 n_total = n_actions + 1  # +1 自启开关
-                if detail_action >= n_actions:
-                    is_auto = True
-                else:
-                    is_auto = False
-                if detail_focus == 'action' or detail_focus == 'autostart':
-                    if key in ('left', 'up'):
+                if key in ('left', 'right'):
+                    if key == 'left':
                         detail_action = (detail_action - 1) % n_total
-                        need_render = True
-                    elif key == 'right':
+                    else:
                         detail_action = (detail_action + 1) % n_total
-                        need_render = True
-                    elif key == 'down':
-                        detail_focus = 'log'
-                        detail_scroll = 0
-                        need_render = True
-                    elif key == 'enter' and not action_state['pending']:
-                        action_state['pending'] = True
-                        action_state['done'] = False
-                        detail_msg = '执行中...'
-                        if detail_action < n_actions:
-                            act = svc_actions[detail_action][0]
-                            threading.Thread(target=run_action,
-                                             args=(detail_name, act),
-                                             daemon=True).start()
-                        else:
-                            threading.Thread(target=lambda:
-                                _do_toggle_autostart(detail_name),
-                                             daemon=True).start()
-                        need_render = True
-                    if is_auto and detail_focus != 'autostart':
-                        detail_focus = 'autostart'
-                    elif not is_auto and detail_focus != 'action':
-                        detail_focus = 'action'
-                elif detail_focus == 'log':
+                    detail_scroll = 0
+                    need_render = True
+                elif key in ('up', 'down'):
                     LOG_PAGE = 5
                     if key == 'up' and detail_scroll > 0:
                         detail_scroll = max(0, detail_scroll - LOG_PAGE)
@@ -366,9 +340,20 @@ def main():
                         if detail_scroll < max_scroll:
                             detail_scroll = min(detail_scroll + LOG_PAGE, max_scroll)
                             need_render = True
-                    elif key in ('left', 'right'):
-                        detail_focus = 'action'
-                        need_render = True
+                elif key == 'enter' and not action_state['pending']:
+                    action_state['pending'] = True
+                    action_state['done'] = False
+                    detail_msg = '执行中...'
+                    if detail_action < n_actions:
+                        act = svc_actions[detail_action][0]
+                        threading.Thread(target=run_action,
+                                         args=(detail_name, act),
+                                         daemon=True).start()
+                    else:
+                        threading.Thread(target=lambda:
+                            _do_toggle_autostart(detail_name),
+                                         daemon=True).start()
+                    need_render = True
 
             # ---------- 音乐列表页 ----------
             elif view == 'music':

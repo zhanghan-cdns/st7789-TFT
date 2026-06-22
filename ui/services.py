@@ -187,8 +187,6 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
         disp.draw_text_pil(12, y, logs[i][:60], LGRAY, size=10)
         y += 13
 
-    hint = ("←→切换  ↓日志  Enter执行" if focus == 'action'
-            else "←→切换  ↓日志  Enter切换自启" if focus == 'autostart'
-            else "↑↓滚动  ←→操作  Esc返回")
+    hint = "←→切换按钮  ↑↓翻日志  Enter执行  Esc返回"
     disp.draw_text_pil(6, H - 12, hint, DGRAY, size=10)
     disp.flush()
