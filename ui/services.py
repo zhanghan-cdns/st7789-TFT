@@ -5,8 +5,8 @@
 """
 from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD
 
-ROWS_PER_PAGE = 6
-ROW_HEIGHT = 28
+ROWS_PER_PAGE = 5
+ROW_HEIGHT = 32
 
 # 详情页操作按钮：(systemctl 动作, 显示文字)，运行时隐藏"启动"
 def get_actions(active):
@@ -83,12 +83,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
         disp.fill_circle(16, y + ROW_HEIGHT // 2, 5, dot_color)
 
         name_clr = WHITE if i != cursor else CYAN
-        disp.draw_text_pil(28, y + 5, display_name, name_clr, size=14)
+        disp.draw_text_pil(28, y + 4, display_name, name_clr, size=16)
 
         en_label = _enabled_label(enabled)
         en_color = _enabled_color(enabled)
-        en_w = disp.text_width_pil(en_label, 14)
-        disp.draw_text_pil(W - 14 - en_w, y + 5, en_label, en_color, size=14)
+        en_w = disp.text_width_pil(en_label, 16)
+        disp.draw_text_pil(W - 14 - en_w, y + 4, en_label, en_color, size=16)
 
         y += ROW_HEIGHT
 
