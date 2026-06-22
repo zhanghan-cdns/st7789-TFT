@@ -141,13 +141,17 @@ def _font(size):
             paths = json.load(f).get('font_paths', [])
     except (IOError, OSError, ValueError):
         pass
+    base = os.path.dirname(os.path.dirname(__file__))
     font = None
     for p in paths:
-        try:
-            font = ImageFont.truetype(p, size)
+        for candidate in (p, os.path.join(base, p)):
+            try:
+                font = ImageFont.truetype(candidate, size)
+                break
+            except (IOError, OSError):
+                continue
+        if font is not None:
             break
-        except (IOError, OSError):
-            continue
     if font is None:
         font = ImageFont.load_default()
     _FONT_CACHE[size] = font
