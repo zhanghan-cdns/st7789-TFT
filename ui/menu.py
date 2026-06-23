@@ -85,9 +85,4 @@ def draw_menu(disp, items, cursor):
         else:
             disp.fill_circle(x + cell_w // 2, y + cell_h // 2, 10, icon_clr)
 
-    # 底部操作提示
-    hint = "Move: arrows   Enter: open   q: quit"
-    hw, _ = disp.text_size_pil(hint, 10)
-    disp.draw_text_pil((W - hw) // 2, H - 13, hint, DGRAY, size=10)
-
     disp.flush()
