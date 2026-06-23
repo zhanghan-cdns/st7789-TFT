@@ -1,9 +1,32 @@
 """设备信息页
 
 展示 CPU、内存、存储、运行时间等基础系统信息。
-数据由 main 传入，只负责渲染。
+数据由 main 传入，只负责渲染。视觉与仪表盘统一：圆点 + 标题 + 进度条 + 数值。
 """
-from color import BLACK, WHITE, GREEN, CYAN, YELLOW, DGRAY, CARD
+from color import (
+    BLACK, WHITE, CYAN, LGRAY, DGRAY, CARD, GREEN, ORANGE, RED,
+    CPU_CLR, MEM_CLR,
+)
+from .dashboard import draw_bar
+
+
+def _pct_color(pct):
+    """按占用率取色：<60% 绿，<85% 橙，≥85% 红"""
+    if pct < 60:
+        return GREEN
+    if pct < 85:
+        return ORANGE
+    return RED
+
+
+def _temp_color(t):
+    if t is None:
+        return LGRAY
+    if t < 55:
+        return GREEN
+    if t < 70:
+        return ORANGE
+    return RED
 
 
 def draw_device(disp, cpu_pct, cpu_temp, mem_used, mem_total, mem_pct,
@@ -13,30 +36,51 @@ def draw_device(disp, cpu_pct, cpu_temp, mem_used, mem_total, mem_pct,
     H = disp.height
     disp.fill_screen(BLACK)
 
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "设备信息", CYAN, size=16)
-
-    cpu_str = f'{cpu_pct}%'
+    # 顶栏：标题 + 右侧温度
+    disp.fill_round_rect(6, 6, W - 12, 30, 8, CARD)
+    disp.draw_text_pil(16, 12, "设备信息", CYAN, size=16)
     if cpu_temp is not None:
-        cpu_str += f'  {cpu_temp:.1f}°C'
-    _row(disp, 6, 42, W - 12, 'CPU', cpu_str, GREEN if cpu_pct < 80 else 0xF800)
+        temp_s = f"{cpu_temp:.1f}\u00b0C"
+        tw = disp.text_width_pil(temp_s, 14)
+        disp.draw_text_pil(W - 14 - tw, 13, temp_s, _temp_color(cpu_temp), size=14)
 
-    mem_str = f'{mem_used}MB / {mem_total}MB ({mem_pct}%)'
-    _row(disp, 6, 76, W - 12, '内存', mem_str, GREEN if mem_pct < 80 else YELLOW)
+    # 三张占用率卡片（CPU / 内存 / 存储）+ 底部运行时间卡片
+    cw = W - 12
+    _stat(disp, 6, 42, cw, 42, 'CPU', cpu_pct, '', CPU_CLR)
+    _stat(disp, 6, 90, cw, 42, '\u5185\u5b58', mem_pct,
+          f'{mem_used}/{mem_total} MB', MEM_CLR)
+    _stat(disp, 6, 138, cw, 42, '\u5b58\u50a8', disk_pct,
+          f'{disk_used}/{disk_total} GB', CYAN)
+    _info(disp, 6, 186, cw, 30, '\u8fd0\u884c\u65f6\u95f4', uptime)
 
-    disk_str = f'{disk_used}G / {disk_total}G ({disk_pct}%)'
-    _row(disp, 6, 110, W - 12, '存储', disk_str, GREEN if disk_pct < 80 else YELLOW)
-
-    _row(disp, 6, 144, W - 12, '运行时间', uptime, WHITE)
-
-    hint = "Esc 返回"
-    disp.draw_text_pil(6, H - 14, hint, DGRAY, size=10)
+    disp.draw_text_pil(6, H - 13, "Esc \u8fd4\u56de", DGRAY, size=10)
     disp.flush()
 
 
-def _row(disp, x, y, w, label, value, color):
-    """绘制一行标签 + 数值"""
-    disp.fill_round_rect(x, y, w, 30, 6, CARD)
-    disp.draw_text_pil(x + 12, y + 7, label, DGRAY, size=12)
+def _stat(disp, x, y, w, h, label, pct, note, dot_color):
+    """占用率卡片：圆点 + 标题 +（右上 note）+ 进度条 + 百分比数值"""
+    disp.fill_round_rect(x, y, w, h, 8, CARD)
+    disp.fill_circle(x + 13, y + 13, 5, dot_color)
+    disp.draw_text_pil(x + 24, y + 7, label, LGRAY, size=12)
+    if note:
+        nw = disp.text_width_pil(note, 11)
+        disp.draw_text_pil(x + w - 12 - nw, y + 8, note, LGRAY, size=11)
+
+    val = f'{int(round(pct))}%'
+    clr = _pct_color(pct)
+    vw, vh = disp.text_size_pil(val, 18)
+    bar_h, bar_y = 12, y + 24
+    bar_w = w - 24 - 12 - vw
+    if bar_w < 30:
+        bar_w = 30
+    draw_bar(disp, x + 12, bar_y, bar_w, bar_h, pct, clr)
+    disp.draw_text_pil(x + 12 + bar_w + 12, bar_y + (bar_h - vh) // 2,
+                       val, clr, size=18)
+
+
+def _info(disp, x, y, w, h, label, value):
+    """无进度条的信息行：左标签 + 右数值"""
+    disp.fill_round_rect(x, y, w, h, 8, CARD)
+    disp.draw_text_pil(x + 14, y + 8, label, LGRAY, size=12)
     vw = disp.text_width_pil(value, 14)
-    disp.draw_text_pil(x + w - 12 - vw, y + 6, value, color, size=14)
+    disp.draw_text_pil(x + w - 14 - vw, y + 7, value, WHITE, size=14)
