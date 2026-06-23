@@ -4,10 +4,11 @@
 数据（菜单项与光标）由 main 维护并传入，保持 UI 无状态约定。
 """
 from color import (
-    BLACK, WHITE, CYAN, GREEN, MAGENTA, YELLOW, ORANGE, DGRAY, LGRAY,
+    WHITE, CYAN, GREEN, MAGENTA, YELLOW, ORANGE, DGRAY, LGRAY,
     CARD, CPU_CLR, BLUE,
 )
 from .icons import get_icon
+from .dashboard import draw_page_frame
 
 ICON_SIZE = 30  # 菜单图标边长（像素）
 
@@ -55,11 +56,7 @@ def draw_menu(disp, items, cursor):
     """
     W = disp.width
     H = disp.height
-    disp.fill_screen(BLACK)
-
-    # 顶栏标题
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "MENU", CYAN, size=16)
+    draw_page_frame(disp, "MENU")
 
     cell_w = (W - 2 * MARGIN - (COLS - 1) * GAP) // COLS
     cell_h = (H - 16 - TOP - 2 * GAP) // 3
