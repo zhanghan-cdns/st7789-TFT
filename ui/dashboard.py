@@ -11,9 +11,9 @@ from color import (
 )
 from .svg_raster import rasterize_svg
 
-# 页面标题用字体路径（assets/ZCOOLQingKeHuangYou-Regular.ttf）
+# 页面标题用字体路径（assets/Alibaba-PuHuiTi-Bold.ttf）
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-HEADER_FONT = os.path.join(BASE_DIR, 'assets', 'ZCOOLQingKeHuangYou-Regular.ttf')
+HEADER_FONT = os.path.join(BASE_DIR, 'assets', 'Alibaba-PuHuiTi-Bold.ttf')
 
 # CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
 CPU_HISTORY_LEN = 60
@@ -30,7 +30,7 @@ def draw_page_frame(disp, title, title_color=BLACK, font_path=None):
     四个外角为圆角；标题栏下沿为直线。各页面在标题栏右侧自行叠加额外信息，
     正文从 y=PAGE_HEADER_H 之下开始，并应保持在内容区内。返回标题栏高度。
 
-    标题默认使用 HEADER_FONT（assets/ZCOOLQingKeHuangYou-Regular.ttf），
+    标题默认使用 HEADER_FONT（assets/Alibaba-PuHuiTi-Bold.ttf），
     可传入自定义 font_path 覆盖。
     """
     W = disp.width
