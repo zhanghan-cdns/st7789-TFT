@@ -352,6 +352,8 @@ class ST7789:
         font = self._pil_font(size, font_path)
         bbox = font.getbbox(text)
         tw, th = bbox[2], bbox[3]
+        if tw <= 0 or th <= 0:
+            return
         img = Image.new("1", (tw, th), 0)
         draw = ImageDraw.Draw(img)
         draw.text((-bbox[0], -bbox[1]), text, font=font, fill=1)
@@ -362,9 +364,28 @@ class ST7789:
 
         hi = (color >> 8) & 0xFF
         lo = color & 0xFF
+
+        # 优先 numpy 向量化写帧缓冲：比逐像素 getpixel 快约 30 倍，
+        # 解决设备端大字体/多段文字渲染卡顿。无 numpy 时回退纯 Python。
+        try:
+            import numpy as np
+        except ImportError:
+            np = None
+        if np is not None:
+            mask = np.array(img, dtype=bool)
+            dx0 = max(x, 0, cx0); dy0 = max(y, 0, cy0)
+            dx1 = min(x + tw, self.width, cx1)
+            dy1 = min(y + th, self.height, cy1)
+            if dx0 >= dx1 or dy0 >= dy1:
+                return
+            sub = mask[dy0 - y:dy1 - y, dx0 - x:dx1 - x]
+            fb = np.frombuffer(self.fbuf, dtype=np.uint8).reshape(
+                self.height, self.width, 2)
+            fb[dy0:dy1, dx0:dx1][sub] = (hi, lo)
+            return
+
         pixel = bytearray([hi, lo])
         stride = self.width * 2
-
         for py in range(th):
             iy = y + py
             if iy < 0 or iy >= self.height or iy < cy0 or iy >= cy1:
