@@ -20,7 +20,7 @@ MENU_ITEMS = [
     {'label': '摄像头', 'color': BLUE, 'page': 'camera'},
     {'label': '关机', 'color': ORANGE, 'page': 'shutdown'},
     {'label': '更新', 'color': YELLOW, 'page': 'update'},
-    {'label': '预留', 'color': DGRAY, 'page': None},
+    {'label': '设备信息', 'color': CYAN, 'page': 'device'},
     {'label': '预留', 'color': DGRAY, 'page': None},
 ]
 

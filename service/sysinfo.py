@@ -1,8 +1,9 @@
-"""系统信息读取：CPU 使用率/温度、风扇转速、内存。
+"""系统信息读取：CPU 使用率/温度、风扇转速、内存、磁盘、运行时间。
 
 均读取 /proc 与 /sys，毫秒级返回，适合主循环每秒调用。
 """
 import glob
+import os
 
 
 def _read_cpu_times():
@@ -77,3 +78,35 @@ def get_memory():
     used = total - avail
     pct = round(100.0 * used / total, 1)
     return round(used / 1024, 1), round(total / 1024, 1), pct
+
+
+def get_disk_usage():
+    """返回 (used_gb, total_gb, pct)"""
+    try:
+        s = os.statvfs('/')
+        total = s.f_frsize * s.f_blocks
+        free = s.f_frsize * s.f_bavail
+        used = total - free
+        pct = round(100.0 * used / total, 1) if total else 0
+        return round(used / (1024**3), 1), round(total / (1024**3), 1), pct
+    except Exception:
+        return 0, 0, 0
+
+
+def get_uptime():
+    """返回运行时间字符串，如 "2天 3小时 15分" """
+    try:
+        with open('/proc/uptime', 'r') as f:
+            secs = int(float(f.read().split()[0]))
+    except Exception:
+        return '--'
+    d, secs = divmod(secs, 86400)
+    h, secs = divmod(secs, 3600)
+    m = secs // 60
+    parts = []
+    if d:
+        parts.append(f'{d}天')
+    if h:
+        parts.append(f'{h}小时')
+    parts.append(f'{m}分')
+    return ''.join(parts)

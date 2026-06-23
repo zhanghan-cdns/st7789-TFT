@@ -12,7 +12,7 @@ import threading
 from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
-    draw_menu, draw_music, draw_now_playing, draw_camera,
+    draw_menu, draw_music, draw_now_playing, draw_camera, draw_device,
     move_cursor, MENU_ITEMS, lunar_date_str, lunar_yi_yi_str,
     get_actions, CPU_HISTORY_LEN,
 )
@@ -21,6 +21,7 @@ from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
 from service import (
     KeyReader, BackgroundSampler,
     get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory,
+    get_disk_usage, get_uptime,
     get_wifi_info, get_ip_address, get_services,
     get_service_status, control_service, toggle_autostart,
     detect_net_iface, read_net_bytes,
@@ -269,6 +270,10 @@ def main():
                 elif view == 'camera':
                     frame = camera_sampler.get() if camera_sampler else None
                     draw_camera(disp, frame)
+                elif view == 'device':
+                    du, dt, dp = get_disk_usage()
+                    draw_device(disp, cpu, cpu_temp, mem_used, mem_total, mem_pct,
+                                du, dt, dp, get_uptime())
                 elif view == 'update':
                     W, H = disp.width, disp.height
                     disp.fill_screen(0)

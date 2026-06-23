@@ -14,6 +14,7 @@ from .services import draw_services, draw_service_detail, get_actions
 from .menu import draw_menu, move_cursor, MENU_ITEMS
 from .music import draw_music, draw_now_playing
 from .camera import draw_camera
+from .device import draw_device
 
 __all__ = [
     'draw_dashboard',
@@ -25,6 +26,7 @@ __all__ = [
     'draw_music',
     'draw_now_playing',
     'draw_camera',
+    'draw_device',
     'move_cursor',
     'MENU_ITEMS',
     'CPU_HISTORY_LEN',

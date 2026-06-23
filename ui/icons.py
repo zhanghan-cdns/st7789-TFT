@@ -19,6 +19,7 @@ _ICON_FILES = {
     'camera': 'camera.svg',
     'shutdown': 'poweroff.svg',
     'update': 'update.svg',
+    'device': 'device.svg',
 }
 
 _cache = {}
