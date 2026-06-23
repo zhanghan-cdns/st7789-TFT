@@ -11,6 +11,10 @@ from color import (
 )
 from .svg_raster import rasterize_svg
 
+# 页面标题用字体路径（assets/ZCOOLQingKeHuangYou-Regular.ttf）
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HEADER_FONT = os.path.join(BASE_DIR, 'assets', 'ZCOOLQingKeHuangYou-Regular.ttf')
+
 # CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
 CPU_HISTORY_LEN = 60
 
@@ -20,11 +24,14 @@ BORDER_W = 4         # 橙色外边框宽度
 PAGE_RADIUS = 8      # 外框四角圆角半径
 
 
-def draw_page_frame(disp, title, title_color=BLACK):
+def draw_page_frame(disp, title, title_color=BLACK, font_path=None):
     """绘制统一页面外框：橙色圆角外框 + 满宽橙色标题栏(黑字) + 黑色内容区。
 
     四个外角为圆角；标题栏下沿为直线。各页面在标题栏右侧自行叠加额外信息，
     正文从 y=PAGE_HEADER_H 之下开始，并应保持在内容区内。返回标题栏高度。
+
+    标题默认使用 HEADER_FONT（assets/ZCOOLQingKeHuangYou-Regular.ttf），
+    可传入自定义 font_path 覆盖。
     """
     W = disp.width
     H = disp.height
@@ -37,7 +44,8 @@ def draw_page_frame(disp, title, title_color=BLACK):
     ir = PAGE_RADIUS - BORDER_W
     disp.fill_round_rect(ix, iy, iw, ih, ir, BLACK)
     disp.fill_rect(ix, iy, iw, ir, BLACK)
-    disp.draw_text_pil(16, 9, title, title_color, size=16)
+    disp.draw_text_pil(16, 9, title, title_color, size=16,
+                       font_path=font_path or HEADER_FONT)
     return PAGE_HEADER_H
 
 
