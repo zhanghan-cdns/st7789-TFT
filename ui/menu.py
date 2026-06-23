@@ -33,17 +33,28 @@ HL = GREEN  # 选中高亮底色（绿色）
 
 
 def move_cursor(cursor, action, total=9):
-    """根据方向键移动九宫格光标，返回新的光标索引（带边界钳制）"""
+    """根据方向键移动九宫格光标，返回新的光标索引（带边界钳制与行间折行）
+
+    左右到行尾时自动折到下一行/上一行。
+    """
     row, col = cursor // COLS, cursor % COLS
     rows = (total + COLS - 1) // COLS
     if action == 'up' and row > 0:
         cursor -= COLS
-    elif action == 'down' and row < rows - 1 and cursor + COLS < total:
-        cursor += COLS
-    elif action == 'left' and col > 0:
-        cursor -= 1
-    elif action == 'right' and col < COLS - 1 and cursor + 1 < total:
-        cursor += 1
+    elif action == 'down' and row < rows - 1:
+        nxt = cursor + COLS
+        if nxt < total:
+            cursor = nxt
+    elif action == 'left':
+        if col > 0:
+            cursor -= 1
+        elif row > 0:
+            cursor -= 1     # 折到上一行末尾
+    elif action == 'right':
+        if col < COLS - 1 and cursor + 1 < total:
+            cursor += 1
+        elif row < rows - 1:
+            cursor += 1     # 折到下一行开头
     return cursor
 
 
