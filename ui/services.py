@@ -51,12 +51,18 @@ def draw_services(disp, services, cursor=0, scroll=0):
     total = len(services)
     disp.fill_screen(BLACK)
 
+    # 橙色外边框（左/右/底，顶部由标题栏充当）
+    BW = 4
+    disp.fill_rect(0, 0, BW, H, ORANGE)
+    disp.fill_rect(W - BW, 0, BW, H, ORANGE)
+    disp.fill_rect(0, H - BW, W, BW, ORANGE)
+
     disp.fill_rect(0, 0, W, 34, ORANGE)
-    disp.draw_text_pil(16, 9, "系统服务", WHITE, size=16)
+    disp.draw_text_pil(16, 9, "系统服务", BLACK, size=16)
     max_page = max((total + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE, 1)
     cur_page = scroll // ROWS_PER_PAGE + 1
     info = f"共 {total} 个 第 {cur_page}/{max_page} 页  光标 {cursor+1}/{total}"
-    disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 13, info, WHITE, size=10)
+    disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 13, info, BLACK, size=10)
 
     # 列头（背景条 + 分隔线）
     hh = 24
@@ -95,7 +101,6 @@ def draw_services(disp, services, cursor=0, scroll=0):
 
         y += ROW_HEIGHT
 
-    disp.draw_text_pil(6, H - 12, "↑↓选择 ←→翻页 Enter详情", DGRAY, size=10)
     disp.flush()
 
 
