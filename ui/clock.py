@@ -16,6 +16,7 @@ import urllib.request
 from PIL import Image, ImageDraw, ImageFont
 
 from color import BLACK, WHITE, CYAN, YELLOW, LGRAY, DGRAY, BLUE, ORANGE
+from .dashboard import HEADER_FONT
 
 # ── 布局常量 ──
 CW, CH = 44, 84              # 单个翻页位宽高
@@ -276,13 +277,13 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, yi_yi_str='', them
             disp.fill_circle(cxc, cy + 15, 4, th['sep'])
 
     date_line = f"{date_str}  {week_str}"
-    dw, dh = disp.text_size_pil(date_line, 18)
+    dw, dh = disp.text_size_pil(date_line, 18, HEADER_FONT)
     y = CARD_Y + CH + 12
-    disp.draw_text_pil((W - dw) // 2, y, date_line, th['date'], size=18)
+    disp.draw_text_pil((W - dw) // 2, y, date_line, th['date'], size=18, font_path=HEADER_FONT)
     y += dh + 10
     full_lunar = f"{lunar_str}  {yi_yi_str}" if yi_yi_str else lunar_str
-    lw, _ = disp.text_size_pil(full_lunar, 18)
-    disp.draw_text_pil((W - lw) // 2, y, full_lunar, th['lunar'], size=18)
+    lw, _ = disp.text_size_pil(full_lunar, 18, HEADER_FONT)
+    disp.draw_text_pil((W - lw) // 2, y, full_lunar, th['lunar'], size=18, font_path=HEADER_FONT)
     hint = "Enter: theme   \u2190 \u2192 back"
     hw, _ = disp.text_size_pil(hint, 10)
     disp.draw_text_pil((W - hw) // 2, H - 14, hint, th['hint'], size=10)

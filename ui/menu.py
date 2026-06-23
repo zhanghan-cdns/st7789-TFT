@@ -67,7 +67,7 @@ def draw_menu(disp, items, cursor):
     """
     W = disp.width
     H = disp.height
-    draw_page_frame(disp, "MENU")
+    draw_page_frame(disp, "菜单")
 
     cell_w = (W - 2 * MARGIN - (COLS - 1) * GAP) // COLS
     cell_h = (H - 16 - TOP - 2 * GAP) // 3
