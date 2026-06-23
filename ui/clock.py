@@ -299,12 +299,14 @@ def draw_clock(disp, time_str, date_str, week_str, lunar_str, yi_yi_str='', them
     if not changed:
         return
 
-    # ── 翻页动画：每张卡片独立刷新，避免外接矩形刷入大量间隔像素 ──
+    # ── 翻页动画：所有变化位合成到 fbuf，再统一刷屏 ──
+    x0 = min(SLOT_X[i] for i in changed)
+    x1 = max(SLOT_X[i] + CW for i in changed)
     for f in range(1, FRAMES + 1):
         t = _ease(f / FRAMES)
         for i in changed:
             _compose(disp, SLOT_X[i], prev[i], digits[i], t, th, alpha=CARD_ALPHA)
-            disp.flush_rect(SLOT_X[i], CARD_Y, CW, CH)
+        disp.flush_rect(x0, CARD_Y, x1 - x0, CH)
         _time.sleep(0.012)
     # 收尾：还原圆角静态新数字
     for i in changed:
