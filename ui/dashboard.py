@@ -164,8 +164,10 @@ def _net_card(disp, x, y, w, h, down, up):
     disp.draw_text_pil(x + 23, y + 10, "NET", LGRAY, size=10)
     d_text = f"\u2193 {_fmt_speed(down)}"
     u_text = f"\u2191 {_fmt_speed(up)}"
-    disp.draw_text_pil(x + 12, y + 28, d_text, ORANGE, size=16)
-    disp.draw_text_pil(x + 12, y + 52, u_text, CYAN, size=16)
+    dw = disp.text_width_pil(d_text, 12)
+    uw = disp.text_width_pil(u_text, 12)
+    disp.draw_text_pil(x + (w - dw) // 2, y + 28, d_text, ORANGE, size=12)
+    disp.draw_text_pil(x + (w - uw) // 2, y + 52, u_text, CYAN, size=12)
 
 
 # ==================== 仪表盘整体绘制 ====================
