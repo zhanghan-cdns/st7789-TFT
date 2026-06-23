@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>菜单页中间区重构预览 (320x240)</title>
+<style>
+  body{margin:0;background:#3a3a3a;color:#ddd;font-family:"Microsoft YaHei",sans-serif;padding:24px}
+  h2{font-weight:500} .row{display:flex;gap:60px;flex-wrap:wrap}
+  .wrap{width:800px;height:600px}                 /* 320x240 缩放 2.5 倍占位 */
+  .screen{width:320px;height:240px;transform:scale(2.5);transform-origin:top left;
+          position:relative;background:#000;border-radius:8px;overflow:hidden}
+  .frame{position:absolute;inset:0;border-radius:8px;background:#FFA500}      /* 橙色外框 */
+  .inner{position:absolute;left:4px;right:4px;top:34px;bottom:4px;background:#000;border-radius:4px}
+  .hdr{position:absolute;left:16px;top:8px;font-size:16px;font-weight:700;color:#000} /* 标题栏黑字 */
+  .grid{position:absolute;left:8px;right:8px;top:38px;bottom:6px;
+        display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:7px}
+  .tile{background:#202020;border-radius:8px;display:flex;flex-direction:column;
+        align-items:center;justify-content:center;gap:3px;box-sizing:border-box;border:1.5px solid transparent}
+  .ico{font-size:24px;line-height:1}
+  .lbl{font-size:11px;line-height:1}
+  /* A 版：选中=橙色实心 + 黑图标黑字 */
+  .A .sel{background:#FFA500}
+  .A .sel .ico,.A .sel .lbl{color:#000 !important}
+  /* B 版：选中=强调色描边 + 微亮卡片 */
+  .B .sel{background:#2c2c2c;border-color:currentColor}
+  .B .sel .ico,.B .sel .lbl{color:inherit}
+  .cap{margin-top:8px;font-size:13px;color:#aaa;width:800px}
+</style>
+</head>
+<body>
+<h2>菜单页中间区重构预览（橙色边框/标题栏保持不变，仅重做中间九宫格）</h2>
+<div class="row">
+  <div>
+    <div class="wrap"><div class="screen A">
+      <div class="frame"></div>
+      <div class="inner"></div>
+      <div class="hdr">MENU</div>
+      <div class="grid" id="gridA"></div>
+    </div></div>
+    <div class="cap"><b>方案 A</b>：选中态 = 橙色实心磁贴 + 黑色图标/标签（与标题栏同主题，最醒目）。当前选中“系统监控”。</div>
+  </div>
+  <div>
+    <div class="wrap"><div class="screen B">
+      <div class="frame"></div>
+      <div class="inner"></div>
+      <div class="hdr">MENU</div>
+      <div class="grid" id="gridB"></div>
+    </div></div>
+    <div class="cap"><b>方案 B</b>：选中态 = 强调色描边 + 卡片微亮，图标/标签用强调色（更克制、彩色感强）。当前选中“系统监控”。</div>
+  </div>
+</div>
+
+<script>
+// 与设备一致的菜单项（图标用 emoji 近似，实际实现仍用 assets 里的 SVG 图标）
+const items = [
+  {l:'系统监控', c:'#ADDCAD', i:'📊'},
+  {l:'时间显示', c:'#00E5E5', i:'🕐'},
+  {l:'系统服务', c:'#3BE03B', i:'⚙️'},
+  {l:'音乐播放', c:'#F25CF2', i:'🎵'},
+  {l:'摄像头',   c:'#5AA0FF', i:'📷'},
+  {l:'关机',     c:'#FFA500', i:'⏻'},
+  {l:'更新',     c:'#EDE85A', i:'⟳'},
+  {l:'设备信息', c:'#00E5E5', i:'🖥️'},
+  {l:'预留',     c:'#5A5A5A', i:'·'},
+];
+const cursor = 0; // 当前选中索引
+function build(id){
+  const g = document.getElementById(id);
+  items.forEach((it,idx)=>{
+    const t = document.createElement('div');
+    t.className = 'tile' + (idx===cursor?' sel':'');
+    t.style.color = it.c;                 // 强调色：图标/标签默认色
+    t.innerHTML = `<div class="ico" style="color:${it.c}">${it.i}</div>`+
+                  `<div class="lbl" style="color:${idx===cursor?'#fff':it.c}">${it.l}</div>`;
+    if(idx===cursor){ t.style.color = it.c; }
+    g.appendChild(t);
+  });
+}
+build('gridA'); build('gridB');
+</script>
+</body>
+</html>

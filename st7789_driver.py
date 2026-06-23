@@ -321,20 +321,25 @@ class ST7789:
             except ImportError:
                 raise ImportError("需要 Pillow: pip install Pillow")
             # 显式字体优先；加载失败不再直接抛异常（否则会让服务崩溃重启），
-            # 而是回退到 config 候选字体，再回退默认字体。
+            # 而是回退到 assets 内置字体 → config 候选字体 → 默认字体。
             if font_path:
                 try:
                     self._FONT_CACHE[key] = ImageFont.truetype(font_path, size)
                 except (IOError, OSError) as e:
                     print(f"[font] 加载失败 {font_path}: {e}，回退候选字体")
             if key not in self._FONT_CACHE:
-                candidates = get_config().get("font_paths", [])
+                # 优先使用 assets 内置字体（阿里巴巴普惠体 Heavy）
+                builtin = os.path.join(
+                    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                    'assets', 'AlibabaPuHuiTi-3-105-Heavy.ttf')
+                builtin_candidates = [builtin] if os.path.exists(builtin) else []
+                candidates = builtin_candidates + get_config().get("font_paths", [])
                 for p in candidates:
                     try:
                         self._FONT_CACHE[key] = ImageFont.truetype(p, size)
                         break
                     except (IOError, OSError):
-                        continue
+                        continue 
             if key not in self._FONT_CACHE:
                 self._FONT_CACHE[key] = ImageFont.load_default()
         return self._FONT_CACHE[key]

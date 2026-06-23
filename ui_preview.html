@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>全部页面 UI 重构预览 (320x240)</title>
+<style>
+  :root{
+    --orange:#FFA500; --card:#1e1e1e; --card2:#2a2a2a; --track:#3a3a3a;
+    --lgray:#b8bcb8; --dgray:#6a6e6a; --white:#fff; --black:#000;
+    --green:#3fe06a; --red:#ff5a5a; --cyan:#34dfe0; --mag:#f25cf2; --yellow:#ede85a;
+    --blue:#5aa0ff; --cpu:#ADDCAD; --mem:#FDD2AE; --sel:#313a31;
+  }
+  body{margin:0;background:#2b2b2b;color:#ddd;font-family:"Microsoft YaHei",sans-serif;padding:20px}
+  h1{font-weight:500;font-size:20px} h3{margin:6px 0 0;font-weight:500;color:#bbb;font-size:14px}
+  .note{color:#999;font-size:13px;max-width:1100px;line-height:1.6}
+  .grid{display:flex;flex-wrap:wrap;gap:46px 56px;margin-top:18px}
+  .cell{width:640px;height:520px}                 /* 320x240 * 2 占位 + 标题 */
+  .screen{width:320px;height:240px;transform:scale(2);transform-origin:top left;
+          position:relative;background:#000;border-radius:8px;overflow:hidden;
+          font-family:"Microsoft YaHei",sans-serif}
+  .frame{position:absolute;inset:0;border-radius:8px;background:var(--orange)}
+  .inner{position:absolute;left:4px;right:4px;top:34px;bottom:4px;background:#000;border-radius:4px}
+  .hdr{position:absolute;left:16px;top:8px;font-size:16px;font-weight:700;color:#000}
+  .hdr-r{position:absolute;right:14px;top:11px;font-size:10px;color:#000}
+  .body{position:absolute;left:4px;right:4px;top:34px;bottom:4px}
+  .card{position:absolute;background:var(--card);border-radius:8px;box-sizing:border-box}
+  .card.b{border:1px solid #333}
+  .dot{position:absolute;border-radius:50%}
+  .t{position:absolute;line-height:1;white-space:nowrap}
+  .bar{position:absolute;background:var(--track);border-radius:99px;overflow:hidden}
+  .bar>i{position:absolute;left:0;top:0;bottom:0;border-radius:99px;display:block}
+  /* 菜单磁贴 */
+  .tile{position:absolute;background:var(--card);border-radius:8px;display:flex;
+        flex-direction:column;align-items:center;justify-content:center;gap:4px;box-sizing:border-box}
+  .tile .ico{font-size:23px;line-height:1}.tile .lbl{font-size:11px;line-height:1}
+  .tile.sel{background:var(--orange)} .tile.sel .ico,.tile.sel .lbl{color:#000!important}
+</style>
+</head>
+<body>
+<h1>全部页面 UI 重构预览（扁平化 · 可在 ST7789 原语下实现 · 橙色边框统一保留）</h1>
+<div class="note">说明：图标用 emoji 近似示意，实现仍用 <code>assets/*.svg</code>；颜色按设备 RGB565 近似；不使用渐变/阴影（设备画不出）。当前对比为"重构后"。</div>
+<div class="grid" id="root"></div>
+
+<script>
+const $=(t,c,s,h)=>{const d=document.createElement(t);if(c)d.className=c;if(s)d.style.cssText=s;if(h!=null)d.innerHTML=h;return d;};
+function screen(title,right,frame,build){
+  const cell=$('div','cell');
+  cell.appendChild($('h3',null,null,title.cap||title));
+  const sc=$('div','screen');
+  if(frame!==false){sc.appendChild($('div','frame'));sc.appendChild($('div','inner'));
+    sc.appendChild($('div','hdr',null,title.t||title));
+    if(right)sc.appendChild($('div','hdr-r',null,right));}
+  const body=$('div',frame===false?'':'body'); if(frame===false){body.style.cssText='position:absolute;inset:0';}
+  sc.appendChild(body); build(body); cell.appendChild(sc);
+  document.getElementById('root').appendChild(cell);
+}
+// 复用：卡片 / 圆点 / 文本 / 进度条
+const card=(b,x,y,w,h,extra='')=>{const d=$('div','card b',`left:${x}px;top:${y}px;width:${w}px;height:${h}px;${extra}`);b.appendChild(d);return d;};
+const dot=(b,x,y,r,c)=>b.appendChild($('div','dot',`left:${x}px;top:${y}px;width:${r*2}px;height:${r*2}px;background:${c}`));
+const txt=(b,x,y,s,c,t,w)=>b.appendChild($('div','t',`left:${x}px;top:${y}px;font-size:${s}px;color:${c};${w?'font-weight:'+w:''}`,t));
+const rtxt=(b,r,y,s,c,t)=>b.appendChild($('div','t',`right:${r}px;top:${y}px;font-size:${s}px;color:${c}`,t));
+const bar=(b,x,y,w,h,frac,c)=>{const o=$('div','bar',`left:${x}px;top:${y}px;width:${w}px;height:${h}px`);o.appendChild($('i',null,`width:${Math.round(w*frac)}px;background:${c}`));b.appendChild(o);};
+
+// ===== 1. 菜单 =====
+const MENU=[['系统监控','var(--cpu)','📊'],['时间显示','var(--cyan)','🕐'],['系统服务','var(--green)','⚙️'],
+['音乐播放','var(--mag)','🎵'],['摄像头','var(--blue)','📷'],['关机','var(--orange)','⏻'],
+['更新','var(--yellow)','🔄'],['设备信息','var(--cyan)','🖥️'],['预留','var(--dgray)','·']];
+screen({t:'MENU',cap:'1) 菜单（图标+标签磁贴，选中=橙色实心）'},null,true,b=>{
+  const gx=8,gy=6,gw=296,gh=192,gap=7,cw=(gw-2*gap)/3,ch=(gh-2*gap)/3;
+  MENU.forEach((m,i)=>{const r=(i/3|0),c=i%3,x=gx+c*(cw+gap),y=gy+r*(ch+gap);
+    const t=$('div','tile'+(i===0?' sel':''),`left:${x}px;top:${y}px;width:${cw}px;height:${ch}px;color:${m[1]}`);
+    t.innerHTML=`<div class="ico" style="color:${i===0?'#000':m[1]}">${m[2]}</div><div class="lbl" style="color:${i===0?'#000':m[1]}">${m[0]}</div>`;
+    b.appendChild(t);});
+});
+
+const C=(b,x,y,w,t,c,big)=>{const e=$('div','t',`left:${x}px;top:${y}px;width:${w}px;text-align:center;font-size:${big}px;color:${c}`,t);e.style.whiteSpace='normal';b.appendChild(e);};
+
+// ===== 2. 系统监控 =====
+screen({t:'系统监控',cap:'2) 系统监控（CPU 折线 / 内存条 / 网络·温度·风扇）'},'📶 MyWiFi  192.168.1.8',true,b=>{
+  card(b,4,4,304,54); dot(b,12,14,4,'var(--cpu)'); txt(b,24,11,10,'var(--lgray)','CPU'); rtxt(b,12,11,11,'var(--cpu)','87%');
+  const NS='http://www.w3.org/2000/svg',sv=document.createElementNS(NS,'svg');
+  sv.setAttribute('style','position:absolute;left:10px;top:28px;width:288px;height:24px');sv.setAttribute('viewBox','0 0 288 24');
+  const pl=document.createElementNS(NS,'polyline');let p='';for(let i=0;i<=40;i++){p+=` ${i*7.2},${14-Math.round(8*Math.sin(i/3))+(i>32?-4:0)}`;}
+  pl.setAttribute('points',p);pl.setAttribute('fill','none');pl.setAttribute('stroke','#ADDCAD');pl.setAttribute('stroke-width','1.4');sv.appendChild(pl);b.appendChild(sv);
+  card(b,4,62,304,40); dot(b,12,72,4,'var(--mem)'); txt(b,24,69,10,'var(--lgray)','MEM'); rtxt(b,12,69,9,'var(--lgray)','1.3GB / 2.0GB');
+  bar(b,12,86,250,8,0.63,'var(--mem)'); rtxt(b,12,84,11,'var(--mem)','63%');
+  const bw=96,by=108,bh=88;const cd=[['NET','var(--green)',null,['↓ 12 K/s','↑ 3 K/s']],['CORE TEMP','var(--red)','56°C'],['FAN','var(--yellow)','4200']];
+  cd.forEach((c,i)=>{const x=4+i*(bw+8);card(b,x,by,bw,bh);dot(b,x+10,by+12,4,c[1]);txt(b,x+20,by+9,9,'var(--lgray)',c[0]);
+    if(c[2])C(b,x,by+42,bw,c[2],c[1],22);else c[3].forEach((l,k)=>txt(b,x+12,by+36+k*22,13,'#fff',l));});
+});
+
+// ===== 3. 时钟 =====
+screen({cap:'3) 时钟（翻页时钟，深色全屏；统一间距）'},null,false,b=>{
+  b.style.background='#000';C(b,0,28,320,'2026-06-23  周二',' #fff'.trim(),16);
+  const xs=[28,72,130,174,232,276],ds=['1','2','3','4','5','6'];
+  xs.forEach((x,i)=>{const c=$('div',null,`position:absolute;left:${x}px;top:66px;width:40px;height:84px;border-radius:6px;background:#1b1b1b`);
+    c.innerHTML=`<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:46px;color:#fff;font-weight:600">${ds[i]}</div><div style="position:absolute;left:0;right:0;top:41px;height:2px;background:#000"></div>`;b.appendChild(c);});
+  C(b,108,90,16,':','#fff',30);C(b,210,90,16,':','#fff',30);
+  C(b,0,168,320,'农历 五月初九',' var(--yellow)'.trim(),14);C(b,0,190,320,'宜 出行 · 忌 动土','var(--lgray)',11);
+});
+
+// ===== 4. 系统服务列表 =====
+screen({t:'系统服务',cap:'4) 系统服务列表'},'共 12 个 · 第 1/3 页',true,b=>{
+  b.appendChild($('div',null,'position:absolute;left:4px;top:2px;width:304px;height:22px;background:#262626;border-radius:4px'));
+  txt(b,28,7,13,'var(--lgray)','服务名称');rtxt(b,12,7,13,'var(--lgray)','自启');
+  const SVC=[['sshd','运行中','var(--green)','启用','var(--green)'],['NetworkManager','运行中','var(--green)','启用','var(--green)'],
+    ['st7789-screen','运行中','var(--green)','启用','var(--green)'],['bluetooth','已停止','var(--lgray)','禁用','var(--red)'],['nginx','失败','var(--red)','静态','var(--orange)']];
+  let y=28;SVC.forEach((s,i)=>{if(i===2)b.appendChild($('div',null,`position:absolute;left:4px;top:${y}px;width:304px;height:30px;background:var(--sel);border-radius:5px`));
+    dot(b,12,y+11,4,s[2]);txt(b,24,y+8,14,i===2?'var(--cyan)':'#fff',s[0]);rtxt(b,12,y+8,13,s[4],s[3]);y+=32;});
+});
+
+// ===== 5. 服务详情 =====
+screen({t:'sshd',cap:'5) 服务详情（状态 + 操作按钮 + 日志）'},null,true,b=>{
+  txt(b,8,6,12,'var(--lgray)','状态:');txt(b,48,6,12,'var(--green)','运行中 (active)');
+  txt(b,8,26,12,'var(--lgray)','自启:');txt(b,48,26,12,'var(--green)','启用');rtxt(b,12,26,12,'#fff','PID 412 · 8.2M');
+  txt(b,8,46,11,'var(--dgray)','OpenBSD Secure Shell server');
+  const bt=[['停止',1],['重启',0],['自启:开',0]];let bx=8;bt.forEach(t=>{b.appendChild($('div',null,`position:absolute;left:${bx}px;top:66px;width:70px;height:26px;border-radius:6px;background:${t[1]?'var(--green)':'var(--card)'};border:1px solid #333;display:flex;align-items:center;justify-content:center;font-size:12px;color:${t[1]?'#000':'#fff'}`,t[0]));bx+=76;});
+  txt(b,8,100,12,'var(--yellow)','✓ 操作成功');txt(b,8,120,11,'var(--lgray)','日志:');
+  ['Started OpenSSH server daemon.','Accepted password for root from ...','pam_unix(sshd:session): session opened','Received disconnect from 10.0.0.5'].forEach((l,i)=>txt(b,8,136+i*14,10,'var(--dgray)',l));
+});
+
+// ===== 6. 音乐列表 =====
+screen({t:'音乐播放',cap:'6) 音乐播放列表（建议加统一橙色边框）'},'3/30',true,b=>{
+  const MU=[['夜曲','周杰伦'],['晴天','周杰伦'],['稻香','周杰伦'],['七里香','周杰伦'],['告白气球','周杰伦'],['青花瓷','周杰伦']];
+  let y=2;MU.forEach((m,i)=>{if(i===2)b.appendChild($('div',null,`position:absolute;left:4px;top:${y}px;width:304px;height:24px;background:var(--sel);border-radius:4px`));
+    if(i===2)dot(b,12,y+9,4,'var(--green)');txt(b,24,y+5,13,i===2?'var(--mag)':'#fff',m[0]);rtxt(b,12,y+6,11,'var(--lgray)',m[1]);y+=24;});
+  card(b,4,160,304,30);txt(b,10,168,13,'#fff','♪ 稻香');rtxt(b,12,168,12,'var(--green)','播放中');
+});
+
+// ===== 7. 正在播放 =====
+screen({t:'正在播放',cap:'7) 正在播放（曲名 / 歌手 / 进度条 / 状态）'},null,true,b=>{
+  C(b,0,22,312,'稻香','#fff',24);C(b,0,58,312,'周杰伦','var(--lgray)',14);
+  bar(b,24,96,264,8,0.4,'var(--mag)');txt(b,24,108,11,'var(--lgray)','1:12');rtxt(b,24,108,11,'var(--lgray)','3:05');
+  C(b,0,132,312,'▶ 播放中','var(--green)',14);
+});
+
+// ===== 8. 设备信息 =====
+screen({t:'设备信息',cap:'8) 设备信息（静态规格）'},'lubancat',true,b=>{
+  const D=[['设备','LubanCat-2 RK3566','var(--green)'],['CPU','Cortex-A55','var(--cpu)'],['核心','4 核 · aarch64','var(--cyan)'],['内存','2048 MB','var(--mem)'],['存储','32 GB','var(--cyan)'],['系统','Debian 11','var(--orange)'],['内核','5.10.110','var(--lgray)']];
+  let y=2;D.forEach(d=>{card(b,4,y,304,24);dot(b,12,y+10,4,d[2]);txt(b,22,y+6,12,'var(--lgray)',d[0]);rtxt(b,10,y+5,13,'#fff',d[1]);y+=26;});
+});
+
+// ===== 9. 摄像头 =====
+screen({cap:'9) 摄像头（全屏画面 + 顶部名称浮层）'},null,false,b=>{
+  b.style.background='repeating-linear-gradient(45deg,#2f3540,#2f3540 12px,#373d48 12px,#373d48 24px)';
+  b.appendChild($('div',null,'position:absolute;left:6px;top:6px;padding:3px 8px;background:#000a;border-radius:5px;font-size:12px;color:#fff','● USB Camera'));
+  b.appendChild($('div',null,'position:absolute;right:8px;bottom:8px;font-size:10px;color:#ccc','Esc 返回'));
+});
+
+// ===== 10. 系统更新 =====
+screen({t:'系统更新',cap:'10) 系统更新（git pull 日志）'},null,true,b=>{
+  const U=['正在拉取更新...','remote: Enumerating objects: 24, done.','Updating 2373235..a1b2c3d','Fast-forward',' ui/menu.py | 40 +++++-----','拉取完成 ✓','正在重启服务...'];
+  let y=4;U.forEach(l=>{txt(b,8,y,12,l.includes('✓')?'var(--green)':'#fff',l);y+=18;});txt(b,8,y+2,12,'var(--lgray)','执行中...');
+});
+
+// ===== 11. 关机确认 =====
+screen({t:'MENU',cap:'11) 关机确认弹窗（叠加在菜单上）'},null,true,b=>{
+  b.appendChild($('div',null,'position:absolute;inset:0;background:#000b'));
+  const m=$('div',null,'position:absolute;left:56px;top:60px;width:200px;height:80px;border-radius:8px;background:var(--card);border:2px solid var(--orange);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px');
+  m.innerHTML='<div style="font-size:18px;color:#fff">确认关机?</div><div style="font-size:12px;color:#9aa39a">Enter 确认&nbsp;&nbsp;&nbsp;Esc 取消</div>';b.appendChild(m);
+});
+</script>
+</body>
+</html>
