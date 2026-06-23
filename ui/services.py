@@ -51,12 +51,12 @@ def draw_services(disp, services, cursor=0, scroll=0):
     total = len(services)
     disp.fill_screen(BLACK)
 
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "系统服务", CYAN, size=16)
+    disp.fill_rect(0, 0, W, 34, ORANGE)
+    disp.draw_text_pil(16, 9, "系统服务", WHITE, size=16)
     max_page = max((total + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE, 1)
     cur_page = scroll // ROWS_PER_PAGE + 1
     info = f"共 {total} 个 第 {cur_page}/{max_page} 页  光标 {cursor+1}/{total}"
-    disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 15, info, WHITE, size=10)
+    disp.draw_text_pil(W - 14 - disp.text_width_pil(info, 10), 13, info, WHITE, size=10)
 
     # 列头（背景条 + 分隔线）
     hh = 24
