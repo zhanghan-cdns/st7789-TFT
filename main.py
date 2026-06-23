@@ -21,7 +21,7 @@ from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
 from service import (
     KeyReader, BackgroundSampler,
     get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory,
-    get_disk_usage, get_uptime,
+    get_disk_usage, get_uptime, get_device_info,
     get_wifi_info, get_ip_address, get_services,
     get_service_status, control_service, toggle_autostart,
     detect_net_iface, read_net_bytes,
@@ -271,9 +271,7 @@ def main():
                     frame = camera_sampler.get() if camera_sampler else None
                     draw_camera(disp, frame)
                 elif view == 'device':
-                    du, dt, dp = get_disk_usage()
-                    draw_device(disp, cpu, cpu_temp, mem_used, mem_total, mem_pct,
-                                du, dt, dp, get_uptime())
+                    draw_device(disp, get_device_info())
                 elif view == 'update':
                     W, H = disp.width, disp.height
                     disp.fill_screen(0)

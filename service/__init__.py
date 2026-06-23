@@ -5,7 +5,7 @@
 """
 from .keyboard import KeyReader
 from .sampler import BackgroundSampler
-from .sysinfo import get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory, get_disk_usage, get_uptime
+from .sysinfo import get_cpu_usage, get_cpu_temp, get_fan_rpm, get_memory, get_disk_usage, get_uptime, get_device_info
 from .network import (
     get_wifi_info, get_ip_address, detect_net_iface, read_net_bytes,
 )
@@ -24,7 +24,7 @@ __all__ = [
     'get_wifi_info', 'get_ip_address', 'detect_net_iface', 'read_net_bytes',
     'get_services', 'get_service_status', 'get_service_logs', 'control_service',
     'toggle_autostart',
-    'get_disk_usage', 'get_uptime',
+    'get_disk_usage', 'get_uptime', 'get_device_info',
     'MusicPlayer', 'get_hot_playlist', 'search_songs', 'get_song_url',
     'CameraStream',
 ]

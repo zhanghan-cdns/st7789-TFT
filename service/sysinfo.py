@@ -110,3 +110,94 @@ def get_uptime():
         parts.append(f'{h}小时')
     parts.append(f'{m}分')
     return ''.join(parts)
+
+
+# ==================== 静态设备信息 ====================
+_device_info_cache = None
+
+
+def _read_board_model():
+    """读取板型名（设备树 model 节点），失败返回 '--'"""
+    for p in ('/proc/device-tree/model', '/sys/firmware/devicetree/base/model'):
+        try:
+            with open(p, 'rb') as f:
+                s = f.read().decode('utf-8', 'ignore').replace('\x00', '').strip()
+                if s:
+                    return s
+        except Exception:
+            pass
+    return '--'
+
+
+def _read_cpu_model():
+    """从 /proc/cpuinfo 解析 CPU 型号与核心数，返回 (model, cores)"""
+    model = None
+    cores = 0
+    try:
+        with open('/proc/cpuinfo') as f:
+            for line in f:
+                if ':' not in line:
+                    continue
+                k, v = line.split(':', 1)
+                k, v = k.strip(), v.strip()
+                if k == 'processor':
+                    cores += 1
+                elif model is None and k in ('model name', 'Model', 'Hardware'):
+                    model = v
+    except Exception:
+        pass
+    if not model:
+        model = _read_board_model()
+    return model or '--', cores
+
+
+def _read_os_release():
+    """读取 /etc/os-release 的 PRETTY_NAME"""
+    try:
+        with open('/etc/os-release') as f:
+            for line in f:
+                if line.startswith('PRETTY_NAME='):
+                    return line.split('=', 1)[1].strip().strip('"')
+    except Exception:
+        pass
+    return '--'
+
+
+def get_device_info():
+    """返回设备静态信息字典（首次读取后缓存）。
+
+    键：board / cpu_model / cpu_cores / cpu_arch / mem_total /
+        disk_total / os / kernel / hostname
+    """
+    global _device_info_cache
+    if _device_info_cache is not None:
+        return _device_info_cache
+
+    info = {}
+    try:
+        u = os.uname()
+        info['hostname'] = u.nodename
+        info['kernel'] = u.release
+        info['cpu_arch'] = u.machine
+    except Exception:
+        info['hostname'] = info['kernel'] = info['cpu_arch'] = '--'
+
+    info['board'] = _read_board_model()
+    info['cpu_model'], info['cpu_cores'] = _read_cpu_model()
+
+    try:
+        with open('/proc/meminfo') as f:
+            kb = next(int(l.split()[1]) for l in f if l.startswith('MemTotal'))
+        info['mem_total'] = f'{round(kb / 1024)} MB'
+    except Exception:
+        info['mem_total'] = '--'
+
+    try:
+        s = os.statvfs('/')
+        info['disk_total'] = f'{s.f_frsize * s.f_blocks / (1024 ** 3):.1f} GB'
+    except Exception:
+        info['disk_total'] = '--'
+
+    info['os'] = _read_os_release()
+    _device_info_cache = info
+    return info
