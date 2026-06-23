@@ -7,7 +7,7 @@
 
 对外重导出常用入口，保持 `from ui import ...` 的调用方式不变。
 """
-from .dashboard import draw_dashboard, draw_page_frame, CPU_HISTORY_LEN
+from .dashboard import draw_dashboard, draw_page_frame, CPU_HISTORY_LEN, HEADER_FONT
 from .clock import draw_clock
 from .lunar import lunar_date_str, lunar_yi_yi_str
 from .services import draw_services, draw_service_detail, get_actions
@@ -31,6 +31,7 @@ __all__ = [
     'move_cursor',
     'MENU_ITEMS',
     'CPU_HISTORY_LEN',
+    'HEADER_FONT',
     'lunar_date_str',
     'lunar_yi_yi_str',
 ]

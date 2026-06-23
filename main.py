@@ -15,7 +15,7 @@ from ui import (
     draw_page_frame,
     draw_menu, draw_music, draw_now_playing, draw_camera, draw_device,
     move_cursor, MENU_ITEMS, lunar_date_str, lunar_yi_yi_str,
-    get_actions, CPU_HISTORY_LEN,
+    get_actions, CPU_HISTORY_LEN, HEADER_FONT,
 )
 from ui.services import ROWS_PER_PAGE as SVC_ROWS
 from ui.music import ROWS_PER_PAGE as MUSIC_ROWS
@@ -43,6 +43,8 @@ def main():
     print("ST7789 初始化中...")
     disp = ST7789()
     disp.init()
+    # 预加载页面标题字体，避免首次进入菜单时卡顿
+    disp._pil_font(16, HEADER_FONT)
     print("初始化完成，启动系统监控")
 
     # 扫描 hwmon 设备（调试风扇）
