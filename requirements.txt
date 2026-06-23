@@ -1,0 +1,4 @@
+Pillow>=10.0.0
+spidev>=3.5
+gpiod>=1.5.4
+numpy>=1.24.0
