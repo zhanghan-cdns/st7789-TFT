@@ -320,9 +320,14 @@ class ST7789:
                 from PIL import ImageFont
             except ImportError:
                 raise ImportError("需要 Pillow: pip install Pillow")
+            # 显式字体优先；加载失败不再直接抛异常（否则会让服务崩溃重启），
+            # 而是回退到 config 候选字体，再回退默认字体。
             if font_path:
-                self._FONT_CACHE[key] = ImageFont.truetype(font_path, size)
-            else:
+                try:
+                    self._FONT_CACHE[key] = ImageFont.truetype(font_path, size)
+                except (IOError, OSError) as e:
+                    print(f"[font] 加载失败 {font_path}: {e}，回退候选字体")
+            if key not in self._FONT_CACHE:
                 candidates = get_config().get("font_paths", [])
                 for p in candidates:
                     try:
@@ -372,17 +377,19 @@ class ST7789:
         except ImportError:
             np = None
         if np is not None:
-            mask = np.array(img, dtype=bool)
-            dx0 = max(x, 0, cx0); dy0 = max(y, 0, cy0)
-            dx1 = min(x + tw, self.width, cx1)
-            dy1 = min(y + th, self.height, cy1)
-            if dx0 >= dx1 or dy0 >= dy1:
+            try:
+                mask = np.array(img, dtype=bool)
+                dx0 = max(x, 0, cx0); dy0 = max(y, 0, cy0)
+                dx1 = min(x + tw, self.width, cx1)
+                dy1 = min(y + th, self.height, cy1)
+                if dx0 < dx1 and dy0 < dy1:
+                    sub = mask[dy0 - y:dy1 - y, dx0 - x:dx1 - x]
+                    fb = np.frombuffer(self.fbuf, dtype=np.uint8).reshape(
+                        self.height, self.width, 2)
+                    fb[dy0:dy1, dx0:dx1][sub] = (hi, lo)
                 return
-            sub = mask[dy0 - y:dy1 - y, dx0 - x:dx1 - x]
-            fb = np.frombuffer(self.fbuf, dtype=np.uint8).reshape(
-                self.height, self.width, 2)
-            fb[dy0:dy1, dx0:dx1][sub] = (hi, lo)
-            return
+            except Exception:
+                pass  # 任何异常都回退逐像素，绝不让渲染崩溃
 
         pixel = bytearray([hi, lo])
         stride = self.width * 2
