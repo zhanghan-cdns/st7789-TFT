@@ -17,21 +17,26 @@ CPU_HISTORY_LEN = 60
 # 统一页面外框尺寸
 PAGE_HEADER_H = 34   # 满宽橙色标题栏高度
 BORDER_W = 4         # 橙色外边框宽度
+PAGE_RADIUS = 8      # 外框四角圆角半径
 
 
 def draw_page_frame(disp, title, title_color=BLACK):
-    """绘制统一页面外框：黑底 + 橙色边框(左/右/底) + 满宽橙色标题栏(黑字)。
+    """绘制统一页面外框：橙色圆角外框 + 满宽橙色标题栏(黑字) + 黑色内容区。
 
-    各页面调用后在标题栏右侧自行叠加额外信息，正文从 y=PAGE_HEADER_H 之下开始，
-    并应保持在 [BORDER_W, W-BORDER_W] 与底边框之上。返回标题栏高度。
+    四个外角为圆角；标题栏下沿为直线。各页面在标题栏右侧自行叠加额外信息，
+    正文从 y=PAGE_HEADER_H 之下开始，并应保持在内容区内。返回标题栏高度。
     """
     W = disp.width
     H = disp.height
     disp.fill_screen(BLACK)
-    disp.fill_rect(0, 0, BORDER_W, H, ORANGE)
-    disp.fill_rect(W - BORDER_W, 0, BORDER_W, H, ORANGE)
-    disp.fill_rect(0, H - BORDER_W, W, BORDER_W, ORANGE)
-    disp.fill_rect(0, 0, W, PAGE_HEADER_H, ORANGE)
+    # 整屏橙色圆角矩形作为外框 + 标题栏底色
+    disp.fill_round_rect(0, 0, W, H, PAGE_RADIUS, ORANGE)
+    # 挖出黑色内容区（下两角圆角随外框，上两角用直角贴住标题栏下沿）
+    ix, iy = BORDER_W, PAGE_HEADER_H
+    iw, ih = W - 2 * BORDER_W, H - PAGE_HEADER_H - BORDER_W
+    ir = PAGE_RADIUS - BORDER_W
+    disp.fill_round_rect(ix, iy, iw, ih, ir, BLACK)
+    disp.fill_rect(ix, iy, iw, ir, BLACK)
     disp.draw_text_pil(16, 9, title, title_color, size=16)
     return PAGE_HEADER_H
 
