@@ -12,6 +12,7 @@ import threading
 from st7789_driver import ST7789
 from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
+    draw_page_frame,
     draw_menu, draw_music, draw_now_playing, draw_camera, draw_device,
     move_cursor, MENU_ITEMS, lunar_date_str, lunar_yi_yi_str,
     get_actions, CPU_HISTORY_LEN,
@@ -274,9 +275,7 @@ def main():
                     draw_device(disp, get_device_info())
                 elif view == 'update':
                     W, H = disp.width, disp.height
-                    disp.fill_screen(0)
-                    disp.fill_round_rect(6, 6, W - 12, 28, 6, 0x3186)
-                    disp.draw_text_pil(16, 11, "系统更新", 0xFFFF, size=16)
+                    draw_page_frame(disp, "系统更新")
                     y = 50
                     lines = update_state.get('lines', [])
                     for ln in lines:

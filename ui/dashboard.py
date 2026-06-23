@@ -14,6 +14,27 @@ from .svg_raster import rasterize_svg
 # CPU 折线图满量程采样点数（采集端历史上限与横轴时间刻度共用）
 CPU_HISTORY_LEN = 60
 
+# 统一页面外框尺寸
+PAGE_HEADER_H = 34   # 满宽橙色标题栏高度
+BORDER_W = 4         # 橙色外边框宽度
+
+
+def draw_page_frame(disp, title, title_color=BLACK):
+    """绘制统一页面外框：黑底 + 橙色边框(左/右/底) + 满宽橙色标题栏(黑字)。
+
+    各页面调用后在标题栏右侧自行叠加额外信息，正文从 y=PAGE_HEADER_H 之下开始，
+    并应保持在 [BORDER_W, W-BORDER_W] 与底边框之上。返回标题栏高度。
+    """
+    W = disp.width
+    H = disp.height
+    disp.fill_screen(BLACK)
+    disp.fill_rect(0, 0, BORDER_W, H, ORANGE)
+    disp.fill_rect(W - BORDER_W, 0, BORDER_W, H, ORANGE)
+    disp.fill_rect(0, H - BORDER_W, W, BORDER_W, ORANGE)
+    disp.fill_rect(0, 0, W, PAGE_HEADER_H, ORANGE)
+    disp.draw_text_pil(16, 9, title, title_color, size=16)
+    return PAGE_HEADER_H
+
 
 def _load_color(pct):
     """按负载百分比返回颜色：<60% 绿，<85% 橙，≥85% 红"""
@@ -167,19 +188,16 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
       net_ip     — 网络接口 IP 地址字符串，None 表示无
     """
     W = disp.width
-    disp.fill_screen(BLACK)
+    draw_page_frame(disp, "系统监控")
 
-    # --- 顶栏：标题 + WiFi 信息 ---
-    # 左半：系统监控标题，右半：WiFi 图标 + SSID + IP
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, "系统监控", CYAN, size=16)
+    # 顶栏右侧：WiFi 图标 + SSID + IP（黑字，叠加在橙色标题栏上）
     if wifi_ssid:
         label = wifi_ssid + (f" {net_ip}" if net_ip else "")
-        draw_wifi_icon(disp, W - 28, 11, wifi_q, CYAN)
-        disp.draw_text_pil(W - 34 - disp.text_width_pil(label, 10), 15, label, WHITE, size=10)
+        draw_wifi_icon(disp, W - 28, 9, wifi_q, BLACK)
+        disp.draw_text_pil(W - 34 - disp.text_width_pil(label, 10), 12, label, BLACK, size=10)
     else:
         label = "WiFi --" + (f" {net_ip}" if net_ip else "")
-        disp.draw_text_pil(W - 14 - disp.text_width_pil(label, 10), 15, label, LGRAY, size=10)
+        disp.draw_text_pil(W - 14 - disp.text_width_pil(label, 10), 12, label, BLACK, size=10)
 
     # --- CPU 折线图卡片 ---
     # 卡片内从上到下：标题行（左侧圆点 + "CPU" 标签 + 右上角当前百分比）
@@ -218,7 +236,7 @@ def draw_dashboard(disp, cpu_pct, cpu_history, cpu_temp, fan_val, fan_unit,
     card_w = (W - 12 - gap * 2) // 3
     x1, x2, x3 = 6, 6 + card_w + gap, 6 + (card_w + gap) * 2
     y_bot = 166
-    h_bot = 72
+    h_bot = 66   # 收窄 6px，给底部橙色边框让位（166+66=232 < H-4）
 
     # 网络流量卡片
     _net_card(disp, x1, y_bot, card_w, h_bot, net_down, net_up)

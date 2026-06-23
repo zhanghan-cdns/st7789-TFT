@@ -4,9 +4,10 @@
 数据由 main 传入（get_device_info() 的字典），只负责渲染。
 """
 from color import (
-    BLACK, WHITE, CYAN, LGRAY, DGRAY, CARD, GREEN, ORANGE,
+    BLACK, WHITE, CYAN, LGRAY, CARD, GREEN, ORANGE,
     CPU_CLR, MEM_CLR,
 )
+from .dashboard import draw_page_frame
 
 
 def _fit(disp, text, size, max_w):
@@ -23,15 +24,12 @@ def _fit(disp, text, size, max_w):
 def draw_device(disp, info):
     """绘制设备信息页（info 为 get_device_info() 返回的字典）"""
     W = disp.width
-    H = disp.height
-    disp.fill_screen(BLACK)
+    draw_page_frame(disp, "\u8bbe\u5907\u4fe1\u606f")
 
-    # 顶栏：标题 + 右侧主机名
-    disp.fill_round_rect(6, 6, W - 12, 28, 8, CARD)
-    disp.draw_text_pil(16, 10, "\u8bbe\u5907\u4fe1\u606f", CYAN, size=16)
+    # 顶栏右侧：主机名（黑字，叠加在橙色标题栏上）
     host = info.get('hostname', '--')
     hw = disp.text_width_pil(host, 12)
-    disp.draw_text_pil(W - 14 - hw, 12, host, LGRAY, size=12)
+    disp.draw_text_pil(W - 14 - hw, 12, host, BLACK, size=12)
 
     cores = info.get('cpu_cores', 0)
     arch = info.get('cpu_arch', '--')
@@ -50,7 +48,6 @@ def draw_device(disp, info):
         _row(disp, x, y, w, h, label, value, dot)
         y += step
 
-    disp.draw_text_pil(6, H - 13, "Esc \u8fd4\u56de", DGRAY, size=10)
     disp.flush()
 
 

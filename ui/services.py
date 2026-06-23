@@ -4,6 +4,7 @@
 数据由 main 采集后传入，支持上下翻页滚动浏览。
 """
 from color import BLACK, WHITE, GREEN, RED, CYAN, ORANGE, YELLOW, DGRAY, LGRAY, CARD
+from .dashboard import draw_page_frame
 
 ROWS_PER_PAGE = 5
 ROW_HEIGHT = 32
@@ -49,16 +50,7 @@ def draw_services(disp, services, cursor=0, scroll=0):
     W = disp.width
     H = disp.height
     total = len(services)
-    disp.fill_screen(BLACK)
-
-    # 橙色外边框（左/右/底，顶部由标题栏充当）
-    BW = 4
-    disp.fill_rect(0, 0, BW, H, ORANGE)
-    disp.fill_rect(W - BW, 0, BW, H, ORANGE)
-    disp.fill_rect(0, H - BW, W, BW, ORANGE)
-
-    disp.fill_rect(0, 0, W, 34, ORANGE)
-    disp.draw_text_pil(16, 9, "系统服务", BLACK, size=16)
+    draw_page_frame(disp, "系统服务")
     max_page = max((total + ROWS_PER_PAGE - 1) // ROWS_PER_PAGE, 1)
     cur_page = scroll // ROWS_PER_PAGE + 1
     info = f"共 {total} 个 第 {cur_page}/{max_page} 页  光标 {cursor+1}/{total}"
@@ -117,12 +109,9 @@ def draw_service_detail(disp, detail, action_cursor=0, msg='',
     """
     W = disp.width
     H = disp.height
-    disp.fill_screen(BLACK)
-
     name = (detail.get('name', '') if detail else '')
     short = name[:-8] if name.endswith('.service') else name
-    disp.fill_round_rect(6, 6, W - 12, 28, 6, CARD)
-    disp.draw_text_pil(16, 11, short[:26], CYAN, size=16)
+    draw_page_frame(disp, short[:24])
 
     if not detail:
         disp.draw_text_pil(16, 70, "加载中...", LGRAY, size=14)
