@@ -22,7 +22,7 @@ MENU_ITEMS = [
     {'label': '关机', 'color': ORANGE, 'page': 'shutdown'},
     {'label': '更新', 'color': YELLOW, 'page': 'update'},
     {'label': '设备信息', 'color': CYAN, 'page': 'device'},
-    {'label': '预留', 'color': DGRAY, 'page': None},
+    {'label': 'AI', 'color': BLUE, 'page': 'deepseek'},
 ]
 
 COLS = 3

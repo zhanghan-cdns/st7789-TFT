@@ -15,6 +15,7 @@ from .menu import draw_menu, move_cursor, MENU_ITEMS
 from .music import draw_music, draw_now_playing
 from .camera import draw_camera
 from .device import draw_device
+from .deepseek import draw_deepseek, ALERT_THRESHOLD
 
 __all__ = [
     'draw_dashboard',
@@ -28,6 +29,8 @@ __all__ = [
     'draw_now_playing',
     'draw_camera',
     'draw_device',
+    'draw_deepseek',
+    'ALERT_THRESHOLD',
     'move_cursor',
     'MENU_ITEMS',
     'CPU_HISTORY_LEN',

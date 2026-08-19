@@ -20,6 +20,7 @@ _ICON_FILES = {
     'shutdown': 'poweroff.svg',
     'update': 'update.svg',
     'device': 'device.svg',
+    'deepseek': 'deepseek.svg',
 }
 
 _cache = {}

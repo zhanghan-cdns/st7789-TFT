@@ -17,9 +17,11 @@ from .music import (
     MusicPlayer, get_hot_playlist, search_songs, get_song_url,
 )
 from .camera import CameraStream
+from .deepseek import get_balance
 
 __all__ = [
     'KeyReader', 'BackgroundSampler',
+    'get_balance',
     'get_cpu_usage', 'get_cpu_temp', 'get_fan_rpm', 'get_memory',
     'get_wifi_info', 'get_ip_address', 'detect_net_iface', 'read_net_bytes',
     'get_services', 'get_service_status', 'get_service_logs', 'control_service',

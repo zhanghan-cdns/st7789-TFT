@@ -14,6 +14,7 @@ from ui import (
     draw_dashboard, draw_clock, draw_services, draw_service_detail,
     draw_page_frame,
     draw_menu, draw_music, draw_now_playing, draw_camera, draw_device,
+    draw_deepseek,
     move_cursor, MENU_ITEMS, lunar_date_str, lunar_yi_yi_str,
     get_actions, CPU_HISTORY_LEN, HEADER_FONT,
 )
@@ -28,6 +29,7 @@ from service import (
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
     CameraStream,
+    get_balance,
 )
 
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -88,6 +90,7 @@ def main():
     player = MusicPlayer()
     music_sampler = None  # 进入音乐页时再懒加载歌单
     camera_sampler = None # 摄像头帧采样器（进入摄像头页时启动）
+    deepseek_sampler = None  # DeepSeek 余额采样器（进入 AI 页时启动）
     print("九宫格菜单：↑↓←→选择，Enter 进入，Esc 返回，q 退出")
 
     # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
@@ -275,6 +278,9 @@ def main():
                     draw_camera(disp, frame)
                 elif view == 'device':
                     draw_device(disp, get_device_info())
+                elif view == 'deepseek':
+                    info = deepseek_sampler.get() if deepseek_sampler else None
+                    draw_deepseek(disp, info)
                 elif view == 'update':
                     W, H = disp.width, disp.height
                     draw_page_frame(disp, "系统更新")
@@ -353,6 +359,10 @@ def main():
                         elif target == 'camera' and camera_sampler is None:
                             camera_sampler = CameraStream()
                             camera_sampler.start()
+                        elif target == 'deepseek' and deepseek_sampler is None:
+                            deepseek_sampler = BackgroundSampler(
+                                get_balance, 300.0, initial=None)
+                            deepseek_sampler.start()
                 elif key == 'quit':
                     break
                 continue
@@ -373,6 +383,11 @@ def main():
                     if camera_sampler is not None:
                         camera_sampler.stop()
                         camera_sampler = None
+                elif view == 'deepseek':
+                    view = 'menu'
+                    if deepseek_sampler is not None:
+                        deepseek_sampler.stop()
+                        deepseek_sampler = None
                 elif view == 'clock':
                     draw_clock._prev = None
                     view = 'menu'
@@ -499,6 +514,8 @@ def main():
             music_sampler.stop()
         if camera_sampler is not None:
             camera_sampler.stop()
+        if deepseek_sampler is not None:
+            deepseek_sampler.stop()
         player.stop()
         keys.restore()
         disp.close()
