@@ -199,8 +199,11 @@ def _draw_balance_card(disp, info, is_peak):
     disp.draw_text_pil(x + w - 14 - pill_w + 9, y + 11, st, st_clr, size=11)
 
     # 第二行：金额 + 模式名（模式紧跟金额右侧，垂直居中）
+    # 金额用语义色：充足=绿 / 较低=橙
     money = _fit(disp, f'{sym}{total}', 32, w - 160)
-    disp.draw_text_pil(x + 14, y + 26, money, WHITE, size=32)
+    money_clr = GREEN if float(info.get('total', 0) or 0) >= ALERT_THRESHOLD \
+        else ORANGE
+    disp.draw_text_pil(x + 14, y + 26, money, money_clr, size=32)
     mode_clr = TXT_BUSY if is_peak else TXT_IDLE
     mode_txt = '梁文峰模式' if is_peak else '梁文谷模式'
     mx = x + 14 + disp.text_width_pil(money, 32) + 12

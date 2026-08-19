@@ -1,35 +1,44 @@
-# hook_report.ps1 - Trae Hook → AI 红绿灯状态上报
-# 用法: powershell -ExecutionPolicy Bypass -File hook_report.ps1 busy|idle
-# 将 Trae 对话生命周期事件（UserPromptSubmit/Stop/Notification）上报到本地 DeepSeek 代理，
-# 并从 stdin 输入中提取当前模型名（model 字段）一并上报。
+# hook_report.ps1 - Trae Hook -> AI traffic-light state reporter
+# Usage: powershell -ExecutionPolicy Bypass -File hook_report.ps1 busy|idle
+# Reports Trae conversation lifecycle events (UserPromptSubmit/Stop/Notification)
+# to the local DeepSeek proxy, and extracts the current model name from stdin.
 param([string]$State = 'idle')
 
-# 调试日志：每次被 Trae 调用都记一行，便于确认 Hook 是否触发
+# Debug log: one line per hook invocation so we can confirm triggering.
 Add-Content -Path (Join-Path $PSScriptRoot 'hook_report.log') `
     -Value ("{0} hook called: {1}" -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $State) `
     -ErrorAction SilentlyContinue
 
-# 读取 stdin 原始 JSON（Trae Hook 输入），尝试提取 model 字段
+# Read raw stdin JSON (Trae Hook input) only when stdin is redirected, with a
+# short timeout so we never hang waiting for EOF. Extract the model field if any.
 $model = ''
 try {
-    $raw = [Console]::In.ReadToEnd()
-    if ($raw -and $raw.Trim()) {
-        $j = $raw | ConvertFrom-Json
-        if ($j.PSObject.Properties.Name -contains 'model') {
-            $model = [string]$j.model
+    if ([Console]::IsInputRedirected) {
+        $task = [Console]::In.ReadToEndAsync()
+        if ([System.Threading.Tasks.Task]::WaitAny(@($task, [System.Threading.Tasks.Task]::Delay(800))) -eq 0) {
+            $raw = $task.Result
+            if ($raw -and $raw.Trim()) {
+                $j = $raw | ConvertFrom-Json
+                if ($j.PSObject.Properties.Name -contains 'model') {
+                    $model = [string]$j.model
+                }
+            }
         }
     }
-} catch {
-    # stdin 解析失败不影响上报
+}
+catch {
+    # stdin read failure must not break reporting
 }
 
-$busy = $State -eq 'busy'
-$busyStr = $(if ($busy) { 'true' } else { 'false' })
-$modelEsc = ($model -replace '\\', '\\\\' -replace '"', '\"')
+$busy = ($State -eq 'busy')
+$busyStr = 'true'
+if (-not $busy) { $busyStr = 'false' }
+$modelEsc = $model.Replace('\', '\\').Replace('"', '\"')
 $body = '{"trae_busy":' + $busyStr + ',"model":"' + $modelEsc + '"}'
 try {
     Invoke-RestMethod -Uri 'http://127.0.0.1:8888/report' -Method Post `
         -Body $body -ContentType 'application/json' -TimeoutSec 3 | Out-Null
-} catch {
-    # 代理未运行时静默失败，不影响 Trae 对话
+}
+catch {
+    # proxy down: fail silently so Trae chat is never blocked
 }
