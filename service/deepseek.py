@@ -1,6 +1,6 @@
 """DeepSeek 余额查询：GET /user/balance，仅用标准库 urllib。
 
-API Key 从环境变量 DEEPSEEK_API_KEY 读取（不落盘、不进代码仓库）。
+API Key 从 config.json 的 deepseek.api_key 读取（环境变量 DEEPSEEK_API_KEY 兜底）。
 网络调用可能阻塞，建议配合 BackgroundSampler 在后台线程定时刷新。
 """
 import json
@@ -18,6 +18,23 @@ _HEADERS = {
                    '(KHTML, like Gecko) Chrome/120.0 Safari/537.36'),
 }
 
+# 配置文件路径（项目根目录 config.json）
+_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
+
+
+def _get_api_key():
+    """读取 API Key：优先环境变量，其次 config.json 的 deepseek.api_key"""
+    key = os.environ.get(KEY_ENV, '').strip()
+    if key:
+        return key
+    try:
+        with open(_CONFIG_PATH, 'r') as f:
+            cfg = json.load(f)
+        return (cfg.get('deepseek') or {}).get('api_key', '').strip()
+    except Exception:
+        return ''
+
 
 def get_balance():
     """查询 DeepSeek 账号余额。
@@ -27,9 +44,9 @@ def get_balance():
             'total': str, 'granted': str, 'topped_up': str, 'ts': float}
       失败: {'ok': False, 'error': str}  （未配置 Key / 网络 / HTTP 错误）
     """
-    api_key = os.environ.get(KEY_ENV, '').strip()
+    api_key = _get_api_key()
     if not api_key:
-        return {'ok': False, 'error': f'未设置 {KEY_ENV} 环境变量'}
+        return {'ok': False, 'error': '未配置 API Key（config.json 的 deepseek.api_key）'}
     headers = dict(_HEADERS)
     headers['Authorization'] = f'Bearer {api_key}'
     try:

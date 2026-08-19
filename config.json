@@ -17,6 +17,9 @@
     "dc_chip": "/dev/gpiochip0",
     "dc_pin": 21
   },
+  "deepseek": {
+    "api_key": "sk-0eb7daa75c2a4339b3fc9275fbad1faa"
+  },
   "font_paths": [
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
