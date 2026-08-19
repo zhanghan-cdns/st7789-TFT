@@ -29,9 +29,14 @@ DATA_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ai_tokens.
 # 请求结束后多久仍视为"调用中"（秒）
 BUSY_WINDOW = 5.0
 
+# Trae Hook 上报的 busy 状态最长保持时间（秒）。Hook 只在事件点上报，
+# 若 Trae 异常退出导致收不到 idle，超时后自动回落，防止红绿灯卡死。
+TRAE_BUSY_TIMEOUT = 30 * 60
+
 _lock = threading.Lock()
 _last_active = 0.0     # 最近一次请求活跃时刻（monotonic）
-_trae_busy = False     # Trae 探测器上报的调用状态（deepseek_detect.ps1）
+_trae_busy = False     # Trae Hook 上报的调用状态（hook_report.ps1）
+_trae_busy_ts = 0.0    # 最近一次 Trae busy 状态上报时刻（monotonic）
 _stats = {}            # {"YYYY-MM-DD": {"HH": {"p": n, "c": n}}}
 
 
@@ -69,7 +74,10 @@ def _record(prompt, completion):
 def _state():
     """组装 /state 响应：红绿灯 + 今日 token + 24h 曲线"""
     with _lock:
-        busy = ((time.monotonic() - _last_active) < BUSY_WINDOW) or _trae_busy
+        trae_busy = _trae_busy
+        if trae_busy and (time.monotonic() - _trae_busy_ts) > TRAE_BUSY_TIMEOUT:
+            trae_busy = False
+        busy = ((time.monotonic() - _last_active) < BUSY_WINDOW) or trae_busy
         lt = time.localtime()
         day = time.strftime('%Y-%m-%d', lt)
         cur_hour = int(time.strftime('%H', lt))
@@ -85,7 +93,7 @@ def _state():
                 c += tc
         return {
             'busy': busy,
-            'trae_busy': _trae_busy,
+            'trae_busy': trae_busy,
             'date': day,
             'today_tokens': {'prompt': p, 'completion': c, 'total': p + c},
             'hourly': hourly,
@@ -133,8 +141,8 @@ class Handler(BaseHTTPRequestHandler):
         self._proxy('POST')
 
     def _report(self):
-        """接收 deepseek_detect.ps1 上报的 Trae 调用状态"""
-        global _trae_busy
+        """接收 Trae Hook 上报的调用状态（hook_report.ps1）"""
+        global _trae_busy, _trae_busy_ts
         ln = int(self.headers.get('Content-Length') or 0)
         try:
             obj = json.loads(self.rfile.read(ln).decode('utf-8', 'ignore')) if ln else {}
@@ -142,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
             obj = {}
         with _lock:
             _trae_busy = bool(obj.get('trae_busy', False))
+            _trae_busy_ts = time.monotonic()
         self._send_json(200, {'ok': True})
 
     # ---------- 转发 ----------
