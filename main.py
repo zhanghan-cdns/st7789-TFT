@@ -365,9 +365,9 @@ def main():
                             deepseek_sampler = BackgroundSampler(
                                 get_balance, 300.0, initial=None)
                             deepseek_sampler.start()
-                            # AI 红绿灯/token 状态，2 秒轮询一次（更实时）
+                            # AI 红绿灯/token 状态，1 秒轮询一次（实时）
                             ai_sampler = BackgroundSampler(
-                                get_ai_state, 2.0, initial=None)
+                                get_ai_state, 1.0, initial=None)
                             ai_sampler.start()
                 elif key == 'quit':
                     break
