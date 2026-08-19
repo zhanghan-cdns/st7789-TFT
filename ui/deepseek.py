@@ -136,6 +136,13 @@ def _default_model():
         return ''
 
 
+def _ink_y(disp, text, size, cy):
+    """按“墨水中心”垂直居中：返回 draw_text_pil 的 y，使文字可见部分中心对齐 cy。
+    基于字体包围盒的上/下留白计算，避免 Heavy 字体顶部留白大导致偏位。"""
+    _, h, asc, _ = disp.text_metrics_pil(text, size)
+    return cy - (h + asc) // 2
+
+
 # ---- 绘制 ----
 
 def _draw_model(disp, ai):
@@ -168,15 +175,15 @@ def _draw_status(disp, ai):
     # 光晕 + 圆灯（28px 光晕圈 + 16px 灯）
     disp.fill_circle(x + 14 + 13, cy, 13, ring)
     disp.fill_circle(x + 14 + 13, cy, 8, lamp)
-    # 状态文字（16px，垂直居中）
-    disp.draw_text_pil(x + 14 + 28 + 12, y + (h - 22) // 2 + 1, label,
+    # 状态文字（16px，墨水中心与圆灯中心对齐）
+    disp.draw_text_pil(x + 14 + 28 + 12, _ink_y(disp, label, 16, cy), label,
                        clr, size=16)
-    # 忙碌时长（右侧）
+    # 忙碌时长（右侧，墨水中心对齐）
     if ai and ai.get('busy') and ai.get('busy_sec', 0):
         sec = int(ai['busy_sec'])
         dur = f'已 {sec // 60:02d}:{sec % 60:02d}'
         disp.draw_text_pil(x + w - 12 - disp.text_width_pil(dur, 12),
-                           y + (h - 16) // 2, dur, WHITE, size=12)
+                           _ink_y(disp, dur, 12, cy), dur, WHITE, size=12)
 
 
 def _draw_balance_card(disp, info, is_peak):
@@ -190,29 +197,34 @@ def _draw_balance_card(disp, info, is_peak):
     ts = info.get('ts', time.time())
 
     # 第一行：左「当前余额」标签 / 右 状态胶囊
-    disp.draw_text_pil(x + 14, y + 8, '当前余额', LGRAY, size=10)
+    disp.draw_text_pil(x + 14, y + 12, '当前余额', LGRAY, size=10)
     st, st_clr = _status(info)
     pill_w = disp.text_width_pil(st, 11) + 18
     pill_h = 22
-    disp.fill_round_rect(x + w - 14 - pill_w, y + 7, pill_w, pill_h, 11,
-                         _pill_bg(st_clr))
-    disp.draw_text_pil(x + w - 14 - pill_w + 9, y + 11, st, st_clr, size=11)
+    pill_cy = y + 12 + 11 // 2  # 胶囊与标签行墨水中心对齐
+    disp.fill_round_rect(x + w - 14 - pill_w, pill_cy - pill_h // 2,
+                         pill_w, pill_h, 11, _pill_bg(st_clr))
+    disp.draw_text_pil(x + w - 14 - pill_w + 9, _ink_y(disp, st, 11, pill_cy),
+                       st, st_clr, size=11)
 
-    # 第二行：金额 + 模式名（模式紧跟金额右侧，垂直居中）
-    # 金额用语义色：充足=绿 / 较低=橙
+    # 第二行：金额 + 模式名（金额下移留出呼吸感，模式紧跟金额右侧，墨水中心对齐）
     money = _fit(disp, f'{sym}{total}', 32, w - 160)
     money_clr = GREEN if float(info.get('total', 0) or 0) >= ALERT_THRESHOLD \
         else ORANGE
-    disp.draw_text_pil(x + 14, y + 26, money, money_clr, size=32)
+    my = y + 34
+    disp.draw_text_pil(x + 14, my, money, money_clr, size=32)
     mode_clr = TXT_BUSY if is_peak else TXT_IDLE
     mode_txt = '梁文峰模式' if is_peak else '梁文谷模式'
     mx = x + 14 + disp.text_width_pil(money, 32) + 12
-    disp.draw_text_pil(mx, y + 38, mode_txt, mode_clr, size=12)
+    _, mh, masc, _ = disp.text_metrics_pil(money, 32)  # 金额墨水中心
+    disp.draw_text_pil(mx, _ink_y(disp, mode_txt, 12,
+                                  my + (mh + masc) // 2),
+                       mode_txt, mode_clr, size=12)
 
     # 第三行：充值+刷新
     info_txt = (f'充值 {sym}{info.get("topped_up", "0.00")} · '
                 f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
-    disp.draw_text_pil(x + 14, y + 74, info_txt, LGRAY, size=10)
+    disp.draw_text_pil(x + 14, y + 78, info_txt, LGRAY, size=10)
 
 
 def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, switch_sec, clr, bg):

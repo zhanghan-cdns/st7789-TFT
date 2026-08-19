@@ -349,6 +349,14 @@ class ST7789:
         bbox = font.getbbox(text)
         return bbox[2] - bbox[0], bbox[3] - bbox[1]
 
+    def text_metrics_pil(self, text, size=16, font_path=None):
+        """返回 (宽, 高, 上留白, 下留白)，基于字体包围盒。
+        上留白/下留白用于按“墨水中心”精确垂直居中，
+        避免不同字体（如阿里巴巴普惠 Heavy）顶部留白大导致文字偏位。"""
+        font = self._pil_font(size, font_path)
+        bbox = font.getbbox(text)
+        return bbox[2] - bbox[0], bbox[3] - bbox[1], -bbox[1], bbox[3]
+
     def text_width_pil(self, text, size=16, font_path=None):
         w, _ = self.text_size_pil(text, size, font_path)
         return w
