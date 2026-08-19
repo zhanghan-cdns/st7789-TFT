@@ -20,6 +20,11 @@
   "deepseek": {
     "api_key": "sk-0eb7daa75c2a4339b3fc9275fbad1faa"
   },
+  "ai_monitor": {
+    "enabled": true,
+    "host": "192.168.66.61",
+    "port": 8888
+  },
   "font_paths": [
     "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
     "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",

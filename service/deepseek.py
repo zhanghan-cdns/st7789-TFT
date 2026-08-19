@@ -36,6 +36,38 @@ def _get_api_key():
         return ''
 
 
+def get_ai_state():
+    """轮询 Windows 端 DeepSeek 本地代理（deepseek_proxy.py）的 /state 接口。
+
+    获取 AI 红绿灯状态与 token 离线统计数据：
+      成功: {'ok': True, 'busy': bool, 'trae_busy': bool,
+            'date': str, 'today_tokens': {...}, 'hourly': [...]}
+      失败: {'ok': False, 'error': str}  （未启用 / 未配置 host / 网络不通）
+
+    依赖 config.json 的 ai_monitor: {enabled, host, port}
+    """
+    try:
+        with open(_CONFIG_PATH, 'r') as f:
+            mon = (json.load(f).get('ai_monitor') or {})
+    except Exception:
+        mon = {}
+    if not mon.get('enabled', True):
+        return {'ok': False, 'error': '未启用 ai_monitor'}
+    host = (mon.get('host') or '').strip()
+    if not host:
+        return {'ok': False, 'error': '未配置 ai_monitor.host'}
+    port = int(mon.get('port') or 8888)
+    try:
+        req = urllib.request.Request(f'http://{host}:{port}/state',
+                                     headers=_HEADERS)
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode('utf-8', 'ignore'))
+        data['ok'] = True
+        return data
+    except Exception as e:
+        return {'ok': False, 'error': f'代理离线: {e}'}
+
+
 def get_balance():
     """查询 DeepSeek 账号余额。
 

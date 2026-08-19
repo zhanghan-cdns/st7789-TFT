@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 *.pyo
+
+# DeepSeek 本地代理运行时统计文件（在 Windows 上运行 deepseek_proxy.py 时生成）
+ai_tokens.json

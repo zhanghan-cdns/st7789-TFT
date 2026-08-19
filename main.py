@@ -29,7 +29,7 @@ from service import (
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
     CameraStream,
-    get_balance,
+    get_balance, get_ai_state,
 )
 
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -91,6 +91,7 @@ def main():
     music_sampler = None  # 进入音乐页时再懒加载歌单
     camera_sampler = None # 摄像头帧采样器（进入摄像头页时启动）
     deepseek_sampler = None  # DeepSeek 余额采样器（进入 AI 页时启动）
+    ai_sampler = None        # AI 红绿灯/token 采样器（进入 AI 页时启动）
     print("九宫格菜单：↑↓←→选择，Enter 进入，Esc 返回，q 退出")
 
     # WiFi 采集放到后台线程，避免 nmcli 扫描阻塞主循环
@@ -280,7 +281,8 @@ def main():
                     draw_device(disp, get_device_info())
                 elif view == 'deepseek':
                     info = deepseek_sampler.get() if deepseek_sampler else None
-                    draw_deepseek(disp, info)
+                    ai = ai_sampler.get() if ai_sampler else None
+                    draw_deepseek(disp, info, ai)
                 elif view == 'update':
                     W, H = disp.width, disp.height
                     draw_page_frame(disp, "系统更新")
@@ -363,6 +365,10 @@ def main():
                             deepseek_sampler = BackgroundSampler(
                                 get_balance, 300.0, initial=None)
                             deepseek_sampler.start()
+                            # AI 红绿灯/token 状态，10 秒轮询一次
+                            ai_sampler = BackgroundSampler(
+                                get_ai_state, 10.0, initial=None)
+                            ai_sampler.start()
                 elif key == 'quit':
                     break
                 continue
@@ -388,6 +394,9 @@ def main():
                     if deepseek_sampler is not None:
                         deepseek_sampler.stop()
                         deepseek_sampler = None
+                    if ai_sampler is not None:
+                        ai_sampler.stop()
+                        ai_sampler = None
                 elif view == 'clock':
                     draw_clock._prev = None
                     view = 'menu'
@@ -516,6 +525,8 @@ def main():
             camera_sampler.stop()
         if deepseek_sampler is not None:
             deepseek_sampler.stop()
+        if ai_sampler is not None:
+            ai_sampler.stop()
         player.stop()
         keys.restore()
         disp.close()
