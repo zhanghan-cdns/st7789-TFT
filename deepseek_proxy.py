@@ -37,6 +37,7 @@ _lock = threading.Lock()
 _last_active = 0.0     # 最近一次请求活跃时刻（monotonic）
 _trae_busy = False     # Trae Hook 上报的调用状态（hook_report.ps1）
 _trae_busy_ts = 0.0    # 最近一次 Trae busy 状态上报时刻（monotonic）
+_current_model = ''    # Trae Hook 上报的当前使用模型名
 _stats = {}            # {"YYYY-MM-DD": {"HH": {"p": n, "c": n}}}
 
 
@@ -72,12 +73,16 @@ def _record(prompt, completion):
 
 
 def _state():
-    """组装 /state 响应：红绿灯 + 今日 token + 24h 曲线"""
+    """组装 /state 响应：红绿灯 + 今日 token + 24h 曲线 + 模型名"""
     with _lock:
         trae_busy = _trae_busy
         if trae_busy and (time.monotonic() - _trae_busy_ts) > TRAE_BUSY_TIMEOUT:
             trae_busy = False
         busy = ((time.monotonic() - _last_active) < BUSY_WINDOW) or trae_busy
+        # busy 起点：Hook 上报优先，否则最近一次 /v1 请求
+        busy_at = _trae_busy_ts if trae_busy else _last_active
+        busy_sec = int(time.monotonic() - busy_at) if busy else 0
+        model = _current_model
         lt = time.localtime()
         day = time.strftime('%Y-%m-%d', lt)
         cur_hour = int(time.strftime('%H', lt))
@@ -94,6 +99,8 @@ def _state():
         return {
             'busy': busy,
             'trae_busy': trae_busy,
+            'busy_sec': busy_sec,
+            'model': model,
             'date': day,
             'today_tokens': {'prompt': p, 'completion': c, 'total': p + c},
             'hourly': hourly,
@@ -141,8 +148,8 @@ class Handler(BaseHTTPRequestHandler):
         self._proxy('POST')
 
     def _report(self):
-        """接收 Trae Hook 上报的调用状态（hook_report.ps1）"""
-        global _trae_busy, _trae_busy_ts
+        """接收 Trae Hook 上报的调用状态 + 当前模型名（hook_report.ps1）"""
+        global _trae_busy, _trae_busy_ts, _current_model
         ln = int(self.headers.get('Content-Length') or 0)
         try:
             obj = json.loads(self.rfile.read(ln).decode('utf-8', 'ignore')) if ln else {}
@@ -151,6 +158,9 @@ class Handler(BaseHTTPRequestHandler):
         with _lock:
             _trae_busy = bool(obj.get('trae_busy', False))
             _trae_busy_ts = time.monotonic()
+            model = (obj.get('model') or '').strip()
+            if model:
+                _current_model = model
         self._send_json(200, {'ok': True})
 
     # ---------- 转发 ----------

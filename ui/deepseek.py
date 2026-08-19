@@ -1,11 +1,11 @@
-"""DeepSeek 余额页（含 AI 红绿灯 + 峰谷模式 + 今日 token 消耗曲线）
+"""DeepSeek 余额页（AI 红绿灯横幅 + 余额 + 峰谷模式）
 
 展示：
-  - 标题栏右侧红绿灯：调用中(红) / 空闲(绿) / 离线·检测中(灰)
-  - 总余额大卡片（含充值余额 + 可用状态，低于告警阈值变色）
-  - 梁文峰模式（高峰 9:00-12:00、14:00-18:00，价格 x2）与
-    梁文谷模式（空闲时段，价格半价）两张模式卡，各带切换倒计时
-  - 今日 token 消耗曲线（24h 柱状图，当前小时高亮）
+  - 整行红绿灯横幅：调用中(红) / 空闲(绿) / 离线·检测中(灰)，大圆灯 + 大字，
+    忙碌时显示已调用时长
+  - 标题栏右侧：当前使用模型名（优先代理上报，其次 config 兜底）
+  - 主余额卡：第一行 金额 + 状态胶囊；第二行 当前模式 + 充值/刷新信息
+  - 峰谷模式卡：梁文峰(高峰) / 梁文谷(空闲)，显示 进行中/稍后进入
 
 数据由 main 传入：
   info: service.deepseek.get_balance() 的返回 dict
@@ -13,55 +13,44 @@
 本模块只负责渲染，不发起任何网络请求。
 """
 import datetime
+import json
+import os
 import time
 
 from color import (
-    BLACK, WHITE, GREEN, RED, ORANGE, YELLOW, CYAN, LGRAY, DGRAY, CARD,
+    BLACK, WHITE, GREEN, RED, ORANGE, YELLOW, LGRAY, CARD,
 )
 from .dashboard import draw_page_frame
 
-# 余额告警阈值（元），低于该值金额显示为橙色并提示
+# 余额告警阈值（元），低于该值金额提示为橙色
 ALERT_THRESHOLD = 10.0
 
 # 货币代码 → 符号
 _CURRENCY = {'CNY': '¥', 'USD': '$'}
 
-# 两张模式卡片宽
-_CARD_W = (320 - 12 - 8) // 2
+# 红绿灯横幅三种底色（深色，配亮圆灯 + 白字）
+BANNER_BUSY = 0x7010    # 深红
+BANNER_IDLE = 0x05A0    # 深绿
+BANNER_OFF  = 0x4208    # 深灰
+
+# 状态胶囊底色（配对应亮色文字）
+PILL_OK = 0x0E60        # 绿底
+PILL_LOW = 0x8A20       # 橙底
+PILL_BAD = 0x8800       # 红底
+
+# 配置文件路径（项目根目录 config.json），用于模型名兜底
+_CONFIG_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'config.json')
 
 
-def _peak_schedule(now=None):
+def _is_peak(now=None):
     """DeepSeek 峰谷时段（北京时间）：高峰 9:00-12:00、14:00-18:00，其余空闲。
-
-    返回 (is_peak, switch_sec)：
-      is_peak: 当前是否处于高峰（梁文峰模式）
-      switch_sec: 距下一次时段切换的剩余秒数
+    返回 True=高峰（梁文峰），False=空闲（梁文谷）。
     """
     if now is None:
         now = datetime.datetime.now()
     h = now.hour
-    if (9 <= h < 12) or (14 <= h < 18):
-        is_peak = True
-        end_h = 12 if h < 12 else 18
-        switch = now.replace(hour=end_h, minute=0, second=0, microsecond=0)
-    else:
-        is_peak = False
-        if h < 9:
-            switch = now.replace(hour=9, minute=0, second=0, microsecond=0)
-        elif h < 14:
-            switch = now.replace(hour=14, minute=0, second=0, microsecond=0)
-        else:
-            switch = (now + datetime.timedelta(days=1)).replace(
-                hour=9, minute=0, second=0, microsecond=0)
-    return is_peak, max(int((switch - now).total_seconds()), 0)
-
-
-def _fmt_cd(sec):
-    """秒 → HH:MM:SS 倒计时"""
-    sec = max(int(sec), 0)
-    hh, rem = divmod(sec, 3600)
-    mm, ss = divmod(rem, 60)
-    return f'{hh:02d}:{mm:02d}:{ss:02d}'
+    return (9 <= h < 12) or (14 <= h < 18)
 
 
 def _sym(currency):
@@ -80,11 +69,10 @@ def _fit(disp, text, size, max_w):
 def _status(info):
     """按余额与可用状态返回 (提示文字, 颜色)"""
     total = float(info.get('total', 0) or 0)
-    sym = _sym(info.get('currency', 'CNY'))
     if not info.get('is_available'):
-        return '余额不足，请充值', RED
+        return '余额不足', RED
     if total < ALERT_THRESHOLD:
-        return f'余额较低 (< {sym}{ALERT_THRESHOLD:.0f})', ORANGE
+        return '余额较低', ORANGE
     return '余额充足', GREEN
 
 
@@ -99,66 +87,107 @@ def _traffic(ai):
     return '空闲', GREEN
 
 
-def _fmt_tokens(n):
-    """token 数量缩写：123 → 123，23456 → 23.5K，1234567 → 1.2M"""
+def _pill_bg(clr):
+    """状态胶囊底色：按文字颜色映射深色底"""
+    return {GREEN: PILL_OK, ORANGE: PILL_LOW, RED: PILL_BAD}.get(clr, BANNER_OFF)
+
+
+def _default_model():
+    """从 config.json 读模型名兜底（ai_monitor.model）"""
     try:
-        n = int(n)
+        with open(_CONFIG_PATH, 'r') as f:
+            return ((json.load(f).get('ai_monitor') or {}).get('model') or '').strip()
     except Exception:
-        return '--'
-    if n >= 1000000:
-        return f'{n / 1000000:.1f}M'
-    if n >= 1000:
-        return f'{n / 1000:.1f}K'
-    return str(n)
+        return ''
 
 
-def _draw_header_light(disp, ai):
-    """标题栏右侧绘制红绿灯（圆点 + 状态文字，黑字叠在橙色标题栏上）"""
+# ---- 绘制 ----
+
+def _draw_model(disp, ai):
+    """标题栏右侧显示当前模型名（黑字叠橙色标题栏）"""
+    m = ''
+    if ai and ai.get('model'):
+        m = str(ai['model']).strip()
+    if not m:
+        m = _default_model()
+    if not m:
+        m = '--'
+    m = _fit(disp, m, 10, 130)
+    disp.draw_text_pil(disp.width - 8 - disp.text_width_pil(m, 10),
+                       12, m, BLACK, size=10)
+
+
+def _draw_banner(disp, ai):
+    """整行红绿灯横幅：深色底 + 大圆灯 + 大字 + 忙碌时长"""
     label, clr = _traffic(ai)
-    tw = disp.text_width_pil(label, 10)
-    disp.fill_circle(disp.width - 14 - tw - 9, 18, 4, clr)
-    disp.draw_text_pil(disp.width - 14 - tw, 12, label, BLACK, size=10)
-
-
-def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, switch_sec, clr):
-    """峰/谷模式卡：圆点 + 模式名 + 标签 + 状态/倒计时"""
-    disp.fill_round_rect(cx, cy, w, h, 8, CARD)
-    disp.fill_circle(cx + 12, cy + 12, 5, clr)
-    disp.draw_text_pil(cx + 23, cy + 10, name, LGRAY, size=10)
-    disp.draw_text_pil(cx + w - 8 - disp.text_width_pil(tag, 10), cy + 10,
-                       tag, LGRAY, size=10)
-    if active:
-        st = f'进行中 {_fmt_cd(switch_sec)}'
+    if ai and ai.get('busy'):
+        bg = BANNER_BUSY
+    elif ai and ai.get('ok'):
+        bg = BANNER_IDLE
     else:
-        st = f'后进入 {_fmt_cd(switch_sec)}'
-    st = _fit(disp, st, 13, w - 24)
-    disp.draw_text_pil(cx + 12, cy + 27, st, clr, size=13)
+        bg = BANNER_OFF
+
+    x, y, w, h = 6, 38, disp.width - 12, 44
+    disp.fill_round_rect(x, y, w, h, 8, bg)
+    # 大圆灯（28px）
+    disp.fill_circle(x + 14 + 14, y + h // 2, 14, clr)
+    # 状态文字（17px，垂直居中）
+    disp.draw_text_pil(x + 14 + 28 + 12, y + (h - 22) // 2 + 1, label,
+                       WHITE, size=17)
+    # 忙碌时长（右侧）
+    if ai and ai.get('busy') and ai.get('busy_sec', 0):
+        sec = int(ai['busy_sec'])
+        dur = f'已 {sec // 60:02d}:{sec % 60:02d}'
+        disp.draw_text_pil(x + w - 12 - disp.text_width_pil(dur, 12),
+                           y + (h - 16) // 2, dur, WHITE, size=12)
 
 
-def _draw_chart(disp, hourly, y=178, h=54):
-    """今日 24h token 消耗柱状图（x 自动适配屏幕宽度）"""
+def _draw_balance_card(disp, info, is_peak):
+    """主余额卡：金额+状态胶囊 ／ 模式名+充值刷新"""
     W = disp.width
-    x = 12
-    w = W - 24
-    # 底部轴线
-    disp.draw_line(x, y + h - 1, x + w, y + h - 1, DGRAY)
+    x, y, w, h = 6, 86, W - 12, 78
+    disp.fill_round_rect(x, y, w, h, 8, CARD)
 
-    vals = [t.get('total', 0) for t in hourly] if hourly else []
-    if not vals:
-        disp.draw_text_pil(W // 2 - 30, y + h // 2 - 6, '等待数据...', LGRAY, size=12)
-        return
-    maxv = max(vals) if vals else 0
-    cur_hour = time.localtime().tm_hour
-    slot = w // len(vals)
-    for i, v in enumerate(vals):
-        bx = x + i * slot
-        if v <= 0:
-            disp.fill_rect(bx + 1, y + h - 2, slot - 2, 2, DGRAY)
-            continue
-        bh = int(h * v / maxv) if maxv else 1
-        bh = max(bh, 2)
-        clr = YELLOW if i == cur_hour else CYAN
-        disp.fill_rect(bx + 1, y + h - bh, slot - 2, bh, clr)
+    sym = _sym(info.get('currency', 'CNY'))
+    total = str(info.get('total', '0.00'))
+    ts = info.get('ts', time.time())
+
+    # 第一行：左金额 / 右状态胶囊（按实际文本高度垂直居中）
+    money = _fit(disp, f'{sym}{total}', 32, w - 150)
+    _, mh = disp.text_size_pil(money, 32)
+    row1_y = y + 12
+    disp.draw_text_pil(x + 14, row1_y, money, WHITE, size=32)
+    st, st_clr = _status(info)
+    pill_w = disp.text_width_pil(st, 11) + 18
+    pill_h = 22
+    pill_y = row1_y + (mh - pill_h) // 2
+    disp.fill_round_rect(x + w - 14 - pill_w, pill_y, pill_w, pill_h, 11,
+                         _pill_bg(st_clr))
+    disp.draw_text_pil(x + w - 14 - pill_w + 9, pill_y + 4, st, st_clr, size=11)
+
+    # 第二行：左 模式名(带圆点) / 右 充值+刷新（紧贴第一行底部 + 8px）
+    row2_y = row1_y + mh + 8
+    mode_clr = RED if is_peak else GREEN
+    mode_txt = '梁文峰模式' if is_peak else '梁文谷模式'
+    disp.fill_circle(x + 18, row2_y + 8, 4, mode_clr)
+    disp.draw_text_pil(x + 27, row2_y + 1, mode_txt, mode_clr, size=12)
+    info_txt = (f'充值 {sym}{info.get("topped_up", "0.00")} · '
+                f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
+    disp.draw_text_pil(x + w - 14 - disp.text_width_pil(info_txt, 10),
+                       row2_y + 2, info_txt, LGRAY, size=10)
+
+
+def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, clr):
+    """峰/谷模式卡：顶部 点+模式名 / 标签，底部 进行中/稍后进入"""
+    disp.fill_round_rect(cx, cy, w, h, 8, CARD)
+    # 顶部
+    disp.fill_circle(cx + 16, cy + 15, 4, clr)
+    disp.draw_text_pil(cx + 26, cy + 9, name, LGRAY, size=11)
+    disp.draw_text_pil(cx + w - 10 - disp.text_width_pil(tag, 10), cy + 10,
+                       tag, LGRAY, size=10)
+    # 底部状态
+    st = '进行中' if active else '稍后进入'
+    disp.draw_text_pil(cx + 12, cy + 27, st, clr, size=15)
 
 
 def draw_deepseek(disp, info, ai=None):
@@ -169,76 +198,35 @@ def draw_deepseek(disp, info, ai=None):
     """
     W = disp.width
     draw_page_frame(disp, 'DeepSeek 余额')
-    _draw_header_light(disp, ai)
+    _draw_model(disp, ai)
+    _draw_banner(disp, ai)
 
     # ---------- 余额未加载 / 查询失败 ----------
     if info is None:
-        disp.draw_text_pil(W // 2 - 32, 105, '加载中...', LGRAY, size=14)
+        disp.draw_text_pil(W // 2 - 32, 130, '加载中...', LGRAY, size=14)
         disp.flush()
         return
 
     if not info.get('ok'):
-        disp.fill_circle(W // 2, 92, 22, RED)
-        disp.draw_text_pil(W // 2 - 9, 84, '!', WHITE, size=18)
+        disp.fill_circle(W // 2, 115, 22, RED)
+        disp.draw_text_pil(W // 2 - 9, 107, '!', WHITE, size=18)
         err = _fit(disp, str(info.get('error', '未知错误')), 13, W - 40)
         disp.draw_text_pil(W // 2 - disp.text_width_pil(err, 13) // 2,
-                           132, err, YELLOW, size=13)
-        disp.draw_text_pil(W // 2 - 34, 170, '按 Esc 返回', LGRAY, size=12)
+                           160, err, YELLOW, size=13)
+        disp.draw_text_pil(W // 2 - 34, 200, '按 Esc 返回', LGRAY, size=12)
         disp.flush()
         return
 
-    sym = _sym(info.get('currency', 'CNY'))
-    total = str(info.get('total', '0.00'))
-    ts = info.get('ts', time.time())
-    is_peak, switch_sec = _peak_schedule()
+    is_peak = _is_peak()
 
-    # ---------- 总余额大卡片 ----------
-    x, y, w, h = 6, 38, W - 12, 64
-    disp.fill_round_rect(x, y, w, h, 8, CARD)
-    disp.fill_circle(x + 12, y + 12, 5,
-                     GREEN if info.get('is_available') else RED)
-    disp.draw_text_pil(x + 23, y + 9, '总余额', LGRAY, size=10)
-    # 右上角：当前峰/谷模式 + 切换倒计时
-    mode_name = '梁文峰' if is_peak else '梁文谷'
-    mode_clr = RED if is_peak else GREEN
-    mode_txt = _fit(disp, f'{mode_name} {_fmt_cd(switch_sec)}', 10, 150)
-    disp.draw_text_pil(x + w - 8 - disp.text_width_pil(mode_txt, 10), y + 9,
-                       mode_txt, mode_clr, size=10)
-    # 金额居中
-    _, clr = _status(info)
-    money = _fit(disp, f'{sym}{total}', 24, w - 24)
-    disp.draw_text_pil(x + (w - disp.text_width_pil(money, 24)) // 2,
-                       y + 26, money, clr, size=24)
-    # 左下角：余额状态（着色）+ 充值/刷新信息
-    st, st_clr = _status(info)
-    st_w = disp.text_width_pil(st, 10)
-    disp.draw_text_pil(x + 12, y + h - 11, st, st_clr, size=10)
-    rest = (f' · 充值 {sym}{info.get("topped_up", "0.00")} · '
-            f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
-    disp.draw_text_pil(x + 12 + st_w, y + h - 11, rest, LGRAY, size=10)
+    # ---------- 主余额卡 ----------
+    _draw_balance_card(disp, info, is_peak)
 
-    # ---------- 梁文峰（高峰）/ 梁文谷（空闲）模式卡 ----------
-    cy = 108
-    ai_ok = bool(ai and ai.get('ok'))
-    _draw_mode_card(disp, 6, cy, _CARD_W, 48, '梁文峰模式', '高峰 x2',
-                    is_peak, switch_sec, RED)
-    _draw_mode_card(disp, 6 + _CARD_W + 8, cy, _CARD_W, 48, '梁文谷模式', '谷段 5折',
-                    not is_peak, switch_sec, GREEN)
-
-    # ---------- 今日 token 消耗曲线 ----------
-    cy = 162
-    disp.fill_round_rect(6, cy, W - 12, 72, 8, CARD)
-    disp.draw_text_pil(18, cy + 6, '今日 Token 消耗', LGRAY, size=10)
-    if ai_ok:
-        hourly = ai.get('hourly') or []
-        peak = max((t.get('total', 0) for t in hourly), default=0)
-        if peak:
-            tip = f'峰值 {_fmt_tokens(peak)}'
-            disp.draw_text_pil(W - 14 - disp.text_width_pil(tip, 10),
-                               cy + 6, tip, LGRAY, size=10)
-    else:
-        disp.draw_text_pil(W - 14 - disp.text_width_pil('代理离线', 10),
-                           cy + 6, '代理离线', LGRAY, size=10)
-    _draw_chart(disp, (ai.get('hourly') or []) if ai_ok else [])
+    # ---------- 峰谷模式卡 ----------
+    cy, ch = 168, 54
+    cw = (W - 12 - 6) // 2
+    _draw_mode_card(disp, 6, cy, cw, ch, '梁文峰', '高峰 x2', is_peak, RED)
+    _draw_mode_card(disp, 6 + cw + 6, cy, cw, ch, '梁文谷', '谷段 5折',
+                    not is_peak, GREEN)
 
     disp.flush()

@@ -4,3 +4,6 @@ __pycache__/
 
 # DeepSeek 本地代理运行时统计文件（在 Windows 上运行 deepseek_proxy.py 时生成）
 ai_tokens.json
+
+# Trae Hook 调试日志（hook_report.ps1 运行时生成）
+hook_report.log
