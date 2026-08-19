@@ -135,11 +135,11 @@ def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, switch_sec, clr):
     disp.draw_text_pil(cx + 12, cy + 27, st, clr, size=13)
 
 
-def _draw_chart(disp, hourly):
-    """今日 24h token 消耗柱状图（y 固定区域，x 自动适配屏幕宽度）"""
+def _draw_chart(disp, hourly, y=178, h=54):
+    """今日 24h token 消耗柱状图（x 自动适配屏幕宽度）"""
     W = disp.width
-    x, y = 12, 172
-    w, h = W - 24, 60
+    x = 12
+    w = W - 24
     # 底部轴线
     disp.draw_line(x, y + h - 1, x + w, y + h - 1, DGRAY)
 
@@ -193,40 +193,41 @@ def draw_deepseek(disp, info, ai=None):
     is_peak, switch_sec = _peak_schedule()
 
     # ---------- 总余额大卡片 ----------
-    x, y, w, h = 6, 38, W - 12, 56
+    x, y, w, h = 6, 38, W - 12, 64
     disp.fill_round_rect(x, y, w, h, 8, CARD)
     disp.fill_circle(x + 12, y + 12, 5,
                      GREEN if info.get('is_available') else RED)
-    disp.draw_text_pil(x + 23, y + 10, '总余额', LGRAY, size=10)
+    disp.draw_text_pil(x + 23, y + 9, '总余额', LGRAY, size=10)
     # 右上角：当前峰/谷模式 + 切换倒计时
     mode_name = '梁文峰' if is_peak else '梁文谷'
     mode_clr = RED if is_peak else GREEN
     mode_txt = _fit(disp, f'{mode_name} {_fmt_cd(switch_sec)}', 10, 150)
-    disp.draw_text_pil(x + w - 8 - disp.text_width_pil(mode_txt, 10), y + 10,
+    disp.draw_text_pil(x + w - 8 - disp.text_width_pil(mode_txt, 10), y + 9,
                        mode_txt, mode_clr, size=10)
+    # 金额居中
     _, clr = _status(info)
-    money = _fit(disp, f'{sym}{total}', 26, w - 24)
-    disp.draw_text_pil(x + (w - disp.text_width_pil(money, 26)) // 2,
-                       y + 22, money, clr, size=26)
+    money = _fit(disp, f'{sym}{total}', 24, w - 24)
+    disp.draw_text_pil(x + (w - disp.text_width_pil(money, 24)) // 2,
+                       y + 26, money, clr, size=24)
     # 左下角：余额状态（着色）+ 充值/刷新信息
     st, st_clr = _status(info)
     st_w = disp.text_width_pil(st, 10)
-    disp.draw_text_pil(x + 12, y + h - 13, st, st_clr, size=10)
+    disp.draw_text_pil(x + 12, y + h - 11, st, st_clr, size=10)
     rest = (f' · 充值 {sym}{info.get("topped_up", "0.00")} · '
             f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
-    disp.draw_text_pil(x + 12 + st_w, y + h - 13, rest, LGRAY, size=10)
+    disp.draw_text_pil(x + 12 + st_w, y + h - 11, rest, LGRAY, size=10)
 
     # ---------- 梁文峰（高峰）/ 梁文谷（空闲）模式卡 ----------
-    cy = 100
+    cy = 108
     ai_ok = bool(ai and ai.get('ok'))
-    _draw_mode_card(disp, 6, cy, _CARD_W, 50, '梁文峰模式', '高峰 x2',
+    _draw_mode_card(disp, 6, cy, _CARD_W, 48, '梁文峰模式', '高峰 x2',
                     is_peak, switch_sec, RED)
-    _draw_mode_card(disp, 6 + _CARD_W + 8, cy, _CARD_W, 50, '梁文谷模式', '谷段 5折',
+    _draw_mode_card(disp, 6 + _CARD_W + 8, cy, _CARD_W, 48, '梁文谷模式', '谷段 5折',
                     not is_peak, switch_sec, GREEN)
 
     # ---------- 今日 token 消耗曲线 ----------
-    cy = 156
-    disp.fill_round_rect(6, cy, W - 12, 78, 8, CARD)
+    cy = 162
+    disp.fill_round_rect(6, cy, W - 12, 72, 8, CARD)
     disp.draw_text_pil(18, cy + 6, '今日 Token 消耗', LGRAY, size=10)
     if ai_ok:
         hourly = ai.get('hourly') or []
