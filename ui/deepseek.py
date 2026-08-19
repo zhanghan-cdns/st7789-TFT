@@ -102,6 +102,8 @@ def _fit(disp, text, size, max_w):
 
 def _status(info):
     """按余额与可用状态返回 (提示文字, 颜色)"""
+    if info.get('error'):
+        return '查询失败', RED
     total = float(info.get('total', 0) or 0)
     if not info.get('is_available'):
         return '余额不足', RED
@@ -259,14 +261,10 @@ def draw_deepseek(disp, info, ai=None):
         return
 
     if not info.get('ok'):
-        disp.fill_circle(W // 2, 115, 22, RED)
-        disp.draw_text_pil(W // 2 - 9, 107, '!', WHITE, size=18)
-        err = _fit(disp, str(info.get('error', '未知错误')), 13, W - 40)
-        disp.draw_text_pil(W // 2 - disp.text_width_pil(err, 13) // 2,
-                           160, err, YELLOW, size=13)
-        disp.draw_text_pil(W // 2 - 34, 200, '按 Esc 返回', LGRAY, size=12)
-        disp.flush()
-        return
+        # API 失效（如 Key 无效）：不显示错误页，降级为金额 0 + 查询失败胶囊
+        info = {'ok': True, 'is_available': False, 'currency': 'CNY',
+                'total': '0.00', 'granted': '0.00', 'topped_up': '0.00',
+                'error': '查询失败', 'ts': info.get('ts', time.time())}
 
     is_peak, switch_sec = _peak_schedule()
 
