@@ -190,6 +190,7 @@ def draw_deepseek(disp, info, ai=None):
     sym = _sym(info.get('currency', 'CNY'))
     total = str(info.get('total', '0.00'))
     ts = info.get('ts', time.time())
+    is_peak, switch_sec = _peak_schedule()
 
     # ---------- 总余额大卡片 ----------
     x, y, w, h = 6, 38, W - 12, 56
@@ -197,22 +198,27 @@ def draw_deepseek(disp, info, ai=None):
     disp.fill_circle(x + 12, y + 12, 5,
                      GREEN if info.get('is_available') else RED)
     disp.draw_text_pil(x + 23, y + 10, '总余额', LGRAY, size=10)
-    st, st_clr = _status(info)
-    disp.draw_text_pil(x + w - 8 - disp.text_width_pil(st, 10), y + 10,
-                       st, st_clr, size=10)
+    # 右上角：当前峰/谷模式 + 切换倒计时
+    mode_name = '梁文峰' if is_peak else '梁文谷'
+    mode_clr = RED if is_peak else GREEN
+    mode_txt = _fit(disp, f'{mode_name} {_fmt_cd(switch_sec)}', 10, 150)
+    disp.draw_text_pil(x + w - 8 - disp.text_width_pil(mode_txt, 10), y + 10,
+                       mode_txt, mode_clr, size=10)
     _, clr = _status(info)
     money = _fit(disp, f'{sym}{total}', 26, w - 24)
     disp.draw_text_pil(x + (w - disp.text_width_pil(money, 26)) // 2,
                        y + 22, money, clr, size=26)
-    disp.draw_text_pil(x + 12, y + h - 13,
-                       f'充值 {sym}{info.get("topped_up", "0.00")} · '
-                       f'刷新 {time.strftime("%H:%M", time.localtime(ts))}',
-                       LGRAY, size=10)
+    # 左下角：余额状态（着色）+ 充值/刷新信息
+    st, st_clr = _status(info)
+    st_w = disp.text_width_pil(st, 10)
+    disp.draw_text_pil(x + 12, y + h - 13, st, st_clr, size=10)
+    rest = (f' · 充值 {sym}{info.get("topped_up", "0.00")} · '
+            f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
+    disp.draw_text_pil(x + 12 + st_w, y + h - 13, rest, LGRAY, size=10)
 
     # ---------- 梁文峰（高峰）/ 梁文谷（空闲）模式卡 ----------
     cy = 100
     ai_ok = bool(ai and ai.get('ok'))
-    is_peak, switch_sec = _peak_schedule()
     _draw_mode_card(disp, 6, cy, _CARD_W, 50, '梁文峰模式', '高峰 x2',
                     is_peak, switch_sec, RED)
     _draw_mode_card(disp, 6 + _CARD_W + 8, cy, _CARD_W, 50, '梁文谷模式', '谷段 5折',
