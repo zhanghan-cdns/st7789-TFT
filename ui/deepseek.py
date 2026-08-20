@@ -1,41 +1,34 @@
-"""DeepSeek 余额页（AI 状态条 + 余额 + 峰谷模式倒计时）
+"""DeepSeek AI 监控页（AI 状态卡通卡 + 峰谷模式倒计时）
 
 展示：
-  - 状态条：低饱和暗色底 + 光晕大圆灯 + 浅色状态字，调用中(红)/空闲(绿)/离线·检测中(灰)，
-    忙碌时显示已调用时长
+  - 状态卡：深色底 + 卡通人脸 + 光晕环，右侧大字状态文字。
+    空闲=绿光晕+眯眯眼微笑，调用中=红光晕+忙碌表情+汗滴，离线=灰光晕+中性表情。
+    忙碌时副行显示已调用时长。
   - 标题栏右侧：当前使用模型名（优先代理上报，其次 config 兜底）
-  - 主余额卡：「当前余额」标签 + 金额 + 状态胶囊；第二行 当前模式 + 充值/刷新信息
   - 峰谷模式卡：梁文峰(高峰 x2) / 梁文谷(谷段 5折)，各带「进行中/后进入」切换倒计时
 
 数据由 main 传入：
-  info: service.deepseek.get_balance() 的返回 dict
   ai:   service.deepseek.get_ai_state() 的返回 dict（None 表示加载中）
 本模块只负责渲染，不发起任何网络请求。
 """
 import datetime
 import json
+import math
 import os
 import time
 
 from color import (
-    BLACK, WHITE, GREEN, RED, ORANGE, YELLOW, LGRAY, CARD,
+    BLACK, WHITE, RED, LGRAY,
 )
 from .dashboard import draw_page_frame
 
-# 余额告警阈值（元），低于该值金额提示为橙色
-ALERT_THRESHOLD = 10.0
-
-# 货币代码 → 符号
-_CURRENCY = {'CNY': '¥', 'USD': '$'}
-
-# ---- v5 深色主题配色（低饱和，融入仪表盘风格）----
-# 状态条 / 模式卡 深色底
+# 状态卡 / 模式卡 深色底
 STATUS_BUSY_BG = 0x2082    # 暗红
 STATUS_IDLE_BG = 0x08E2    # 暗绿
 STATUS_OFF_BG  = 0x18E3    # 暗灰
 MODE_PEAK_BG   = 0x2082    # 高峰卡底（暗红）
 MODE_VALLEY_BG = 0x08E2    # 谷段卡底（暗绿）
-# 圆灯光晕圈（中亮）
+# 人脸光晕环（中亮）
 RING_BUSY      = 0x7904    # 中红
 RING_IDLE      = 0x1A45    # 中绿
 RING_OFF       = 0x4208    # 中灰
@@ -43,10 +36,11 @@ RING_OFF       = 0x4208    # 中灰
 TXT_BUSY       = 0xFC51    # 浅红
 TXT_IDLE       = 0x7F71    # 浅绿
 TXT_OFF        = LGRAY
-# 状态胶囊浅底
-PILL_OK_BG     = 0x0942    # 绿底
-PILL_LOW_BG    = 0x28C1    # 橙底
-PILL_BAD_BG    = 0x2861    # 红底
+# 卡通人脸用色
+FACE_YELLOW    = 0xFEAC    # 奶黄肤色
+EYE_DARK       = BLACK     # 五官深色
+BLUSH_PINK     = 0xFCB2    # 腮红
+SWEAT_BLUE     = 0x2DFF    # 汗滴
 
 # 配置文件路径（项目根目录 config.json），用于模型名兜底
 _CONFIG_PATH = os.path.join(
@@ -87,10 +81,6 @@ def _fmt_cd(sec):
     return f'{hh:02d}:{mm:02d}:{ss:02d}'
 
 
-def _sym(currency):
-    return _CURRENCY.get(currency, currency + ' ')
-
-
 def _fit(disp, text, size, max_w):
     """按像素宽度裁剪文本，超宽时尾部加省略号"""
     if disp.text_width_pil(text, size) <= max_w:
@@ -100,20 +90,8 @@ def _fit(disp, text, size, max_w):
     return text + '\u2026'
 
 
-def _status(info):
-    """按余额与可用状态返回 (提示文字, 颜色)"""
-    if info.get('error'):
-        return '查询失败', RED
-    total = float(info.get('total', 0) or 0)
-    if not info.get('is_available'):
-        return '余额不足', RED
-    if total < ALERT_THRESHOLD:
-        return '余额较低', ORANGE
-    return '余额充足', GREEN
-
-
 def _traffic(ai):
-    """状态条：返回 (文字, 文字色)。ai 为 None 表示数据加载中。"""
+    """状态卡：返回 (文字, 文字色)。ai 为 None 表示数据加载中。"""
     if ai is None:
         return '检测中', TXT_OFF
     if not ai.get('ok'):
@@ -121,12 +99,6 @@ def _traffic(ai):
     if ai.get('busy'):
         return '调用中', TXT_BUSY
     return '空闲', TXT_IDLE
-
-
-def _pill_bg(clr):
-    """状态胶囊底色：按文字颜色映射浅色底"""
-    return {GREEN: PILL_OK_BG, ORANGE: PILL_LOW_BG,
-            RED: PILL_BAD_BG}.get(clr, STATUS_OFF_BG)
 
 
 def _default_model():
@@ -145,6 +117,55 @@ def _ink_y(disp, text, size, cy):
     return cy - (h + asc) // 2
 
 
+# ---- 卡通人脸 ----
+
+def _draw_arc(disp, cx, cy, r, a0, a1, color, thick=2):
+    """折线画圆弧（屏幕坐标 y 向下：0°=右，90°=下）。thick 为线宽像素。"""
+    n = max(int(abs(a1 - a0) // 4) + 1, 8)
+    for k in range(thick):
+        rr = r - k
+        pts = []
+        for i in range(n + 1):
+            a = math.radians(a0 + (a1 - a0) * i / n)
+            pts.append((int(round(cx + rr * math.cos(a))),
+                        int(round(cy + rr * math.sin(a)))))
+        for i in range(n):
+            disp.draw_line(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], color)
+
+
+def _draw_face(disp, cx, cy, r, mode):
+    """卡通人脸。mode: 'idle'(绿·微笑) / 'busy'(红·忙碌) / 'off'(灰·中性)"""
+    ring = {'busy': RING_BUSY, 'idle': RING_IDLE, 'off': RING_OFF}[mode]
+    disp.fill_circle(cx, cy, r + 8, ring)   # 光晕环
+    disp.fill_circle(cx, cy, r, FACE_YELLOW)
+
+    if mode == 'idle':
+        # 眯眯眼（◠）+ 微笑嘴 + 腮红
+        for sx in (-1, 1):
+            _draw_arc(disp, cx + sx * 11, cy - 7, 5, 200, 340, EYE_DARK)
+        _draw_arc(disp, cx, cy + 8, 12, 15, 165, EYE_DARK)
+        for sx in (-1, 1):
+            disp.fill_circle(cx + sx * 17, cy + 6, 3, BLUSH_PINK)
+    elif mode == 'busy':
+        # 皱眉 + 圆睁眼 + 张嘴吐舌 + 汗滴
+        for sx in (-1, 1):
+            disp.draw_line(cx + sx * 15, cy - 17, cx + sx * 5, cy - 12, EYE_DARK)
+            disp.draw_line(cx + sx * 15, cy - 16, cx + sx * 5, cy - 11, EYE_DARK)
+            disp.fill_circle(cx + sx * 11, cy - 6, 3, EYE_DARK)
+        disp.fill_circle(cx, cy + 13, 7, EYE_DARK)     # 张开的嘴
+        disp.fill_circle(cx, cy + 16, 3, RED)          # 舌头
+        # 额头右侧汗滴：跨过脸缘压到红色光晕上，更醒目
+        disp.fill_circle(cx + 26, cy - 21, 5, SWEAT_BLUE)
+        disp.draw_line(cx + 26, cy - 30, cx + 26, cy - 21, SWEAT_BLUE)
+        disp.draw_line(cx + 25, cy - 29, cx + 25, cy - 21, SWEAT_BLUE)
+    else:
+        # 圆睁眼 + 中性嘴
+        for sx in (-1, 1):
+            disp.fill_circle(cx + sx * 11, cy - 6, 3, EYE_DARK)
+        disp.draw_line(cx - 9, cy + 13, cx + 9, cy + 13, EYE_DARK)
+        disp.draw_line(cx - 9, cy + 14, cx + 9, cy + 14, EYE_DARK)
+
+
 # ---- 绘制 ----
 
 def _draw_model(disp, ai):
@@ -161,72 +182,36 @@ def _draw_model(disp, ai):
                        12, m, BLACK, size=10)
 
 
-def _draw_status(disp, ai):
-    """状态条：低饱和暗色底 + 光晕圆灯 + 浅色状态字 + 忙碌时长"""
+def _draw_status_card(disp, ai):
+    """AI 状态卡通卡：深色底 + 左侧人脸 + 右侧状态文字"""
     label, clr = _traffic(ai)
     if ai and ai.get('busy'):
-        bg, ring, lamp = STATUS_BUSY_BG, RING_BUSY, RED
+        bg, mode = STATUS_BUSY_BG, 'busy'
     elif ai and ai.get('ok'):
-        bg, ring, lamp = STATUS_IDLE_BG, RING_IDLE, GREEN
+        bg, mode = STATUS_IDLE_BG, 'idle'
     else:
-        bg, ring, lamp = STATUS_OFF_BG, RING_OFF, LGRAY
+        bg, mode = STATUS_OFF_BG, 'off'
 
-    x, y, w, h = 6, 38, disp.width - 12, 42
-    cy = y + h // 2
-    disp.fill_round_rect(x, y, w, h, 8, bg)
-    # 光晕 + 圆灯（28px 光晕圈 + 16px 灯）
-    disp.fill_circle(x + 14 + 13, cy, 13, ring)
-    disp.fill_circle(x + 14 + 13, cy, 8, lamp)
-    # 状态文字（16px，墨水中心与圆灯中心对齐）
-    disp.draw_text_pil(x + 14 + 28 + 12, _ink_y(disp, label, 16, cy), label,
-                       clr, size=16)
-    # 忙碌时长（右侧，墨水中心对齐）
-    if ai and ai.get('busy') and ai.get('busy_sec', 0):
-        sec = int(ai['busy_sec'])
-        dur = f'已 {sec // 60:02d}:{sec % 60:02d}'
-        disp.draw_text_pil(x + w - 12 - disp.text_width_pil(dur, 12),
-                           _ink_y(disp, dur, 12, cy), dur, WHITE, size=12)
+    x, y, w, h = 6, 38, disp.width - 12, 132
+    disp.fill_round_rect(x, y, w, h, 12, bg)
 
+    # 左侧卡通人脸（光晕 + 肤色圆脸）
+    cx, cy = x + 56, y + h // 2
+    _draw_face(disp, cx, cy, 34, mode)
 
-def _draw_balance_card(disp, info, is_peak):
-    """主余额卡：当前余额标签+胶囊 ／ 金额+模式 ／ 充值刷新"""
-    W = disp.width
-    x, y, w, h = 6, 84, W - 12, 98
-    disp.fill_round_rect(x, y, w, h, 10, CARD)
-
-    sym = _sym(info.get('currency', 'CNY'))
-    total = str(info.get('total', '0.00'))
-    ts = info.get('ts', time.time())
-
-    # 第一行：左「当前余额」标签 / 右 状态胶囊
-    disp.draw_text_pil(x + 14, y + 12, '当前余额', LGRAY, size=10)
-    st, st_clr = _status(info)
-    pill_w = disp.text_width_pil(st, 11) + 18
-    pill_h = 22
-    pill_cy = y + 12 + 11 // 2  # 胶囊与标签行墨水中心对齐
-    disp.fill_round_rect(x + w - 14 - pill_w, pill_cy - pill_h // 2,
-                         pill_w, pill_h, 11, _pill_bg(st_clr))
-    disp.draw_text_pil(x + w - 14 - pill_w + 9, _ink_y(disp, st, 11, pill_cy),
-                       st, st_clr, size=11)
-
-    # 第二行：金额 + 模式名（金额下移留出呼吸感，模式紧跟金额右侧，墨水中心对齐）
-    money = _fit(disp, f'{sym}{total}', 32, w - 160)
-    money_clr = GREEN if float(info.get('total', 0) or 0) >= ALERT_THRESHOLD \
-        else ORANGE
-    my = y + 34
-    disp.draw_text_pil(x + 14, my, money, money_clr, size=32)
-    mode_clr = TXT_BUSY if is_peak else TXT_IDLE
-    mode_txt = '梁文峰模式' if is_peak else '梁文谷模式'
-    mx = x + 14 + disp.text_width_pil(money, 32) + 12
-    _, mh, masc, _ = disp.text_metrics_pil(money, 32)  # 金额墨水中心
-    disp.draw_text_pil(mx, _ink_y(disp, mode_txt, 12,
-                                  my + (mh + masc) // 2),
-                       mode_txt, mode_clr, size=12)
-
-    # 第三行：充值+刷新
-    info_txt = (f'充值 {sym}{info.get("topped_up", "0.00")} · '
-                f'刷新 {time.strftime("%H:%M", time.localtime(ts))}')
-    disp.draw_text_pil(x + 14, y + 78, info_txt, LGRAY, size=10)
+    # 右侧：大字状态 + 副行
+    tx = cx + 34 + 24
+    disp.draw_text_pil(tx, _ink_y(disp, label, 30, cy - 20), label, clr, size=30)
+    if ai and ai.get('busy'):
+        sec = int(ai.get('busy_sec') or 0)
+        sub, sub_clr = f'已调用 {sec // 60:02d}:{sec % 60:02d}', WHITE
+    elif ai is None:
+        sub, sub_clr = '正在检测 AI 状态...', LGRAY
+    elif not ai.get('ok'):
+        sub, sub_clr = 'AI 服务未连接', LGRAY
+    else:
+        sub, sub_clr = '随时待命', WHITE
+    disp.draw_text_pil(tx, _ink_y(disp, sub, 13, cy + 26), sub, sub_clr, size=13)
 
 
 def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, switch_sec, clr, bg):
@@ -243,36 +228,19 @@ def _draw_mode_card(disp, cx, cy, w, h, name, tag, active, switch_sec, clr, bg):
     disp.draw_text_pil(cx + 12, cy + 24, st, clr, size=13)
 
 
-def draw_deepseek(disp, info, ai=None):
-    """绘制 DeepSeek 余额页。
+def draw_deepseek(disp, ai=None):
+    """绘制 DeepSeek AI 监控页。
 
-    info: get_balance() 返回值；None 表示余额数据加载中。
     ai:   get_ai_state() 返回值；None 表示 AI 状态加载中。
     """
     W = disp.width
-    draw_page_frame(disp, 'DeepSeek 余额')
+    draw_page_frame(disp, 'DeepSeek 监控')
     _draw_model(disp, ai)
-    _draw_status(disp, ai)
-
-    # ---------- 余额未加载 / 查询失败 ----------
-    if info is None:
-        disp.draw_text_pil(W // 2 - 32, 130, '加载中...', LGRAY, size=14)
-        disp.flush()
-        return
-
-    if not info.get('ok'):
-        # API 失效（如 Key 无效）：不显示错误页，降级为金额 0 + 查询失败胶囊
-        info = {'ok': True, 'is_available': False, 'currency': 'CNY',
-                'total': '0.00', 'granted': '0.00', 'topped_up': '0.00',
-                'error': '查询失败', 'ts': info.get('ts', time.time())}
-
-    is_peak, switch_sec = _peak_schedule()
-
-    # ---------- 主余额卡 ----------
-    _draw_balance_card(disp, info, is_peak)
+    _draw_status_card(disp, ai)
 
     # ---------- 峰谷模式卡 ----------
-    cy, ch = 186, 48
+    is_peak, switch_sec = _peak_schedule()
+    cy, ch = 178, 50
     cw = (W - 12 - 6) // 2
     _draw_mode_card(disp, 6, cy, cw, ch, '梁文峰', '高峰 x2', is_peak,
                     switch_sec, TXT_BUSY, MODE_PEAK_BG)

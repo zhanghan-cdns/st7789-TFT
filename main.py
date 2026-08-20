@@ -29,7 +29,7 @@ from service import (
     detect_net_iface, read_net_bytes,
     MusicPlayer, get_hot_playlist, get_song_url,
     CameraStream,
-    get_balance, get_ai_state,
+    get_ai_state,
 )
 
 WEEKDAYS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
@@ -90,7 +90,6 @@ def main():
     player = MusicPlayer()
     music_sampler = None  # 进入音乐页时再懒加载歌单
     camera_sampler = None # 摄像头帧采样器（进入摄像头页时启动）
-    deepseek_sampler = None  # DeepSeek 余额采样器（进入 AI 页时启动）
     ai_sampler = None        # AI 红绿灯/token 采样器（进入 AI 页时启动）
     print("九宫格菜单：↑↓←→选择，Enter 进入，Esc 返回，q 退出")
 
@@ -280,9 +279,8 @@ def main():
                 elif view == 'device':
                     draw_device(disp, get_device_info())
                 elif view == 'deepseek':
-                    info = deepseek_sampler.get() if deepseek_sampler else None
                     ai = ai_sampler.get() if ai_sampler else None
-                    draw_deepseek(disp, info, ai)
+                    draw_deepseek(disp, ai)
                 elif view == 'update':
                     W, H = disp.width, disp.height
                     draw_page_frame(disp, "系统更新")
@@ -361,11 +359,8 @@ def main():
                         elif target == 'camera' and camera_sampler is None:
                             camera_sampler = CameraStream()
                             camera_sampler.start()
-                        elif target == 'deepseek' and deepseek_sampler is None:
-                            deepseek_sampler = BackgroundSampler(
-                                get_balance, 300.0, initial=None)
-                            deepseek_sampler.start()
-                            # AI 红绿灯/token 状态，1 秒轮询一次（实时）
+                        elif target == 'deepseek' and ai_sampler is None:
+                            # AI 红绿灯状态，1 秒轮询一次（实时）
                             ai_sampler = BackgroundSampler(
                                 get_ai_state, 1.0, initial=None)
                             ai_sampler.start()
@@ -391,9 +386,6 @@ def main():
                         camera_sampler = None
                 elif view == 'deepseek':
                     view = 'menu'
-                    if deepseek_sampler is not None:
-                        deepseek_sampler.stop()
-                        deepseek_sampler = None
                     if ai_sampler is not None:
                         ai_sampler.stop()
                         ai_sampler = None
@@ -523,8 +515,6 @@ def main():
             music_sampler.stop()
         if camera_sampler is not None:
             camera_sampler.stop()
-        if deepseek_sampler is not None:
-            deepseek_sampler.stop()
         if ai_sampler is not None:
             ai_sampler.stop()
         player.stop()

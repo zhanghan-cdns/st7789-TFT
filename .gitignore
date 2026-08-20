@@ -7,3 +7,4 @@ ai_tokens.json
 
 # Trae Hook 调试日志（hook_report.ps1 运行时生成）
 hook_report.log
+hook_stdin.log
