@@ -18,6 +18,13 @@ try {
         if ([System.Threading.Tasks.Task]::WaitAny(@($task, [System.Threading.Tasks.Task]::Delay(800))) -eq 0) {
             $raw = $task.Result
             if ($raw -and $raw.Trim()) {
+                # Debug: dump raw stdin to inspect the real Hook JSON structure
+                try {
+                    $rawTrunc = $raw
+                    if ($rawTrunc.Length -gt 2000) { $rawTrunc = $rawTrunc.Substring(0, 2000) }
+                    Set-Content -Path (Join-Path $PSScriptRoot 'hook_stdin.log') `
+                        -Value $rawTrunc -ErrorAction SilentlyContinue
+                } catch { }
                 $j = $raw | ConvertFrom-Json
                 if ($j.PSObject.Properties.Name -contains 'model') {
                     $model = [string]$j.model
